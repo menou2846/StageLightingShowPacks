@@ -46,7 +46,7 @@ function sameBytes(a,b) {
   return true;
 }
 function fromB64(encoded) {
-  if (typeof encoded!=="string" || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)) fail("Base64が不正です");
+  if (typeof encoded!=="string" || encoded.length%4!==0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) fail("Base64が不正です");
   const b=atob(encoded);
   const out=Uint8Array.from(b,c=>c.charCodeAt(0));
   if(toB64(out)!==encoded)fail("Base64が正規形式ではありません");
