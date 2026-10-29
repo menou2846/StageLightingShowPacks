@@ -7,7 +7,7 @@ import {resolve,sep} from "node:path";
 import {chromium} from "playwright";
 import {fnv32,readPack} from "../show-pack-codec.mjs";
 
-const root=fileURLToPath(new URL("../",import.meta.url));
+const root=resolve(fileURLToPath(new URL("../",import.meta.url)));
 const str=s=>{const b=Buffer.alloc(4+s.length*2);b.writeInt32LE(s.length,0);for(let i=0;i<s.length;i++)b.writeUInt16LE(s.charCodeAt(i),4+2*i);return b;};
 const i32=n=>{const b=Buffer.alloc(4);b.writeInt32LE(n);return b;};
 const f32=n=>{const b=Buffer.alloc(4);b.writeFloatLE(n);return b;};
@@ -53,7 +53,7 @@ try{
   const errors=[];
   page.on("pageerror",err=>errors.push(String(err)));
   await page.goto("http://127.0.0.1:"+port+"/");
-  await page.waitForFunction(()=>document.querySelector("#status").textContent.includes("公開済み公演"));
+  await page.waitForFunction(()=>document.querySelector("#status")?.textContent.includes("公開済み公演"));
   assert.equal(await page.isDisabled("#copy-url"),true);
   assert.equal(await page.isDisabled("#download-original"),true);
   // File is processed locally. No outbound HTTP calls, no GitHub authentication.
