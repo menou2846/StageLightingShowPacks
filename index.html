@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Stage Lighting ConsoleのVRChat公演データ配信ページ。">
+  <title>Show Library — Stage Lighting Console</title>
+  <style>
+    :root { color-scheme: dark; --bg: #10151d; --panel: #1c2430; --line: #334154; --ink: #eef2f8; --mute: #a9b6c7; --accent: #9ad0ed; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at 70% -30%, #273952 0%, transparent 55%), var(--bg); color: var(--ink); font: 15px/1.65 system-ui,-apple-system,"Yu Gothic","Meiryo",sans-serif; }
+    a { color: var(--accent); } a:hover { text-decoration: none; }
+    button { font: inherit; cursor: pointer; }
+    .shell { max-width: 1020px; padding: 34px 22px 76px; margin: auto; }
+    .eyebrow { font: 700 11px/1.2 ui-monospace,Consolas,monospace; color: var(--accent); text-transform: uppercase; letter-spacing: .16em; }
+    .topline { display:flex; justify-content:space-between; gap: 16px; flex-wrap:wrap; align-items:center; border-bottom:1px solid var(--line); padding-bottom:18px; }
+    .brand { display:flex; gap:11px; align-items:center; font-weight:800; letter-spacing:.05em; }
+    .brand-mark { display:grid; place-items:center; width:32px; height:32px; border:1px solid var(--accent); border-radius:9px; color:var(--accent); font-weight:900; }
+    .topline span { color:var(--mute); font-size: 12px; }
+    header { margin: 46px 0 34px; }
+    h1 { font-size: clamp(30px,5vw,58px); letter-spacing:-.035em; line-height:1.1; margin: 12px 0 16px; }
+    header p { max-width: 650px; color: var(--mute); margin:0; font-size: 16px; }
+    .grid { display:grid; grid-template-columns: 1.4fr .8fr; gap: 18px; }
+    .panel { background: linear-gradient(150deg,#202a37,#19212c); border:1px solid var(--line); border-radius:18px; padding:28px; min-width:0; }
+    .status { display:inline-flex; gap:8px; align-items:center; font-size:13px; color:var(--mute); }
+    .dot { width:8px; height:8px; border-radius:100%; background:#6c7e92; }
+    .dot.ready { background:#77cbb2; }
+    .show-title { margin:17px 0 8px; font-size: clamp(20px,3vw,29px); overflow-wrap:anywhere; }
+    .show-sub { margin:0 0 24px; color:var(--mute); overflow-wrap:anywhere; }
+    .stats { display:grid; grid-template-columns:repeat(3,1fr); margin: 20px 0; gap:10px; }
+    .stat { background:#111b25; border:1px solid #304055; border-radius:10px; padding:12px; }
+    .stat strong { font-size:22px; display:block; font-variant-numeric: tabular-nums; line-height:1.3; }
+    .stat small { color:var(--mute); font-size:12px; }
+    .actions { display:flex; flex-wrap:wrap; gap:10px; padding-top:5px; }
+    .action { border:1px solid var(--line); color:var(--ink); padding:10px 14px; border-radius:9px; background:#2d3d4d; text-decoration:none; font-weight:650; }
+    .action.primary { background: #afd9ed; color:#0d1a23; border-color:#afd9ed; }
+    .action:disabled, .action[aria-disabled="true"] { opacity:.45; pointer-events:none; }
+    .action:focus-visible, a:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
+    .tip { color:var(--mute); font-size:13px; }
+    h2 { font-size:17px; margin:0 0 12px; }
+    ol { padding-left:22px; margin:12px 0; } li { padding:5px 0; }
+    code { overflow-wrap:anywhere; color:#c4e5f7; font: 12px/1.6 ui-monospace,Consolas,monospace; }
+    .url { display:block; padding:13px 14px; border:1px solid var(--line); border-radius:10px; background:#111b25; margin:10px 0; }
+    .below { border-top:1px solid var(--line); margin-top:26px; padding-top:20px; color:var(--mute); font-size:13px; }
+    footer { margin-top:30px; color:var(--mute); font-size:12px; }
+    @media(max-width:750px) { .grid { grid-template-columns:1fr; } header { margin:32px 0 24px; } .panel { padding:20px; } .stats { gap:6px; } .stat { padding:9px; } }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <nav class="topline" aria-label="サイト">
+    <div class="brand"><div class="brand-mark" aria-hidden="true">S</div> STAGE LIGHTING CONSOLE</div>
+    <span>SHOW DATA DELIVERY / VRCHAT</span>
+  </nav>
+  <header>
+    <div class="eyebrow">Public Show Library</div>
+    <h1>公演データの保管庫</h1>
+    <p>VRChatで制作した照明CueをPCで編集し、公開用のShow Packとして配信するためのページです。公演データは担当者の確認後に公開されます。</p>
+  </header>
+  <main class="grid">
+    <section class="panel" aria-labelledby="show-section">
+      <div class="status" role="status"><span id="status-dot" class="dot"></span><span id="status">公開データを確認中…</span></div>
+      <h2 class="show-title" id="show-section">最新の公演データ</h2>
+      <p id="show-description" class="show-sub">GitHub Pagesに公開されたShow Packを取得します。</p>
+      <div class="stats" aria-label="Show情報">
+        <div class="stat"><strong id="cue-count">—</strong><small>Cues</small></div>
+        <div class="stat"><strong id="release-revision">—</strong><small>Release</small></div>
+        <div class="stat"><strong id="schema">—</strong><small>Schema</small></div>
+      </div>
+      <div class="actions">
+        <a id="json-open" class="action primary" href="./show-pack.json" aria-disabled="true">JSONを開く</a>
+        <button id="copy-url" class="action" type="button" disabled>VRChat用URLをコピー</button>
+        <button id="refresh" class="action" type="button">更新を確認</button>
+      </div>
+      <p class="tip" id="detail">まだ公演データは公開されていません。公開前のリハーサルデータはここには置かないでください。</p>
+    </section>
+    <aside class="panel" aria-labelledby="how-to">
+      <h2 id="how-to">VRChatへの取り込み</h2>
+      <ol>
+        <li>このページで公開版のCue数とReleaseを確認。</li>
+        <li>「VRChat用URLをコピー」を押す。</li>
+        <li>ワールド内のSHOW管理 → REMOTEにURLを入力。</li>
+        <li>取得 → 検証・比較 → 確認 → 取込確定。</li>
+      </ol>
+      <h2>固定の取得先</h2>
+      <code id="url" class="url"></code>
+      <p class="tip">このURLは最新の公開版1件を返します。複数公演の一覧や同時管理は後続バージョンで対応予定です。</p>
+    </aside>
+  </main>
+  <div class="below">
+    <strong>公開範囲について</strong>
+    <p>このサイトと <code>show-pack.json</code> は一般公開されます。リハーサルの未公開情報、個人情報、秘密の演出データを含む場合は公開しないでください。配信されるFNVハッシュは破損検出用で、作者を保証する署名ではありません。</p>
+    <p>PC受取・編集ツールからGitHubへの書込みを行うには、別途GitHub CLIでのログインが必要です。Webページ自体にGitHubへの書込み機能はありません。</p>
+  </div>
+  <footer>Stage Lighting Console · Show Pack v1 · Read-only Public Delivery</footer>
+</div>
+<script>
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const packURL = new URL("./show-pack.json", location.href).href;
+  $("url").textContent = packURL;
+  const number = value => Number.isSafeInteger(value) && value >= 0 ? String(value) : "—";
+  function state(text, ready) {
+    $("status").textContent = text;
+    $("status-dot").classList.toggle("ready", ready);
+    $("copy-url").disabled = !ready;
+    $("json-open").setAttribute("aria-disabled", String(!ready));
+  }
+  async function loadPack() {
+    state("公開データを確認中…", false);
+    $("detail").textContent = "GitHub Pagesの配信内容を確認しています。";
+    try {
+      const response = await fetch(packURL, { cache:"no-store" });
+      if (!response.ok) {
+        if (response.status === 404) {
+          state("まだ公演データはありません", false);
+          $("show-description").textContent = "最初の公開用Show Packを待っています。";
+          $("detail").textContent = "公演データの公開はPC用Show Managerから明示操作した場合のみ行われます。";
+          return;
+        }
+        throw new Error("HTTP " + response.status);
+      }
+      const data = await response.json();
+      if (data?.format !== "stage-lighting-show-pack" || data?.packVersion !== 1 ||
+          typeof data.showId !== "string" || typeof data.displayName !== "string" ||
+          typeof data.payloadBase64 !== "string" || !Number.isInteger(data.cueCount) ||
+          !Number.isInteger(data.releaseRevision)) throw new Error("Show Pack形式を確認できません");
+      $("show-section").textContent = data.displayName || "公開中の公演";
+      $("show-description").textContent = "Show ID: " + data.showId;
+      $("cue-count").textContent = number(data.cueCount);
+      $("release-revision").textContent = number(data.releaseRevision);
+      $("schema").textContent = number(data.dataSchema);
+      $("detail").textContent = "最新公開版です。取り込み前にVRChatのREMOTE画面でも必ず検証してください。";
+      state("Show Pack公開中", true);
+    } catch (error) {
+      state("取得できませんでした", false);
+      $("show-description").textContent = "公演データを読み込めませんでした。";
+      $("detail").textContent = "ネットワーク・Pages配信設定・JSON形式を確認してください。詳細: " + String(error?.message ?? error);
+    }
+  }
+  $("copy-url").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(packURL);
+      $("copy-url").textContent = "コピーしました";
+      $("copy-url").blur();
+    } catch {
+      $("detail").textContent = "コピーできない環境です。右の固定URLを選択してコピーしてください。";
+    }
+  });
+  $("refresh").addEventListener("click", loadPack);
+  loadPack();
+})();
+</script>
+</body>
+</html>
