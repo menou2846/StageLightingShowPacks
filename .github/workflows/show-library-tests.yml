@@ -1,0 +1,38 @@
+name: Show Library — validate names, snapshot and manifest
+
+on:
+  pull_request:
+    paths:
+      - "show-pack-codec.mjs"
+      - "show-library-catalog.mjs"
+      - "show-library-app.mjs"
+      - "index.html"
+      - "catalog.json"
+      - "tests/**"
+      - ".github/workflows/show-library-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  site-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check JavaScript syntax
+        run: node --check show-pack-codec.mjs && node --check show-library-catalog.mjs && node --check show-library-app.mjs
+      - name: Run lossless Snapshot and catalog tests
+        run: node --test tests/*.test.mjs
+      - name: Install Chromium for browser smoke test
+        run: |
+          npm install --no-save playwright@1.57.0
+          npx playwright install --with-deps chromium
+      - name: Exercise JSON upload, editing and download in Chromium
+        run: node tests/browser-smoke.mjs
+      - name: Check published catalog is initially empty
+        run: |
+          node --input-type=module -e 'import fs from "node:fs"; import {readCatalog} from "./show-library-catalog.mjs"; const c=readCatalog(fs.readFileSync("catalog.json","utf8")); if(c.shows.length)process.exit(1);'
