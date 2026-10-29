@@ -1,157 +1,145 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <meta name="description" content="Stage Lighting ConsoleのVRChat公演データ配信ページ。">
-  <title>Show Library — Stage Lighting Console</title>
-  <style>
-    :root { color-scheme: dark; --bg: #10151d; --panel: #1c2430; --line: #334154; --ink: #eef2f8; --mute: #a9b6c7; --accent: #9ad0ed; }
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at 70% -30%, #273952 0%, transparent 55%), var(--bg); color: var(--ink); font: 15px/1.65 system-ui,-apple-system,"Yu Gothic","Meiryo",sans-serif; }
-    a { color: var(--accent); } a:hover { text-decoration: none; }
-    button { font: inherit; cursor: pointer; }
-    .shell { max-width: 1020px; padding: 34px 22px 76px; margin: auto; }
-    .eyebrow { font: 700 11px/1.2 ui-monospace,Consolas,monospace; color: var(--accent); text-transform: uppercase; letter-spacing: .16em; }
-    .topline { display:flex; justify-content:space-between; gap: 16px; flex-wrap:wrap; align-items:center; border-bottom:1px solid var(--line); padding-bottom:18px; }
-    .brand { display:flex; gap:11px; align-items:center; font-weight:800; letter-spacing:.05em; }
-    .brand-mark { display:grid; place-items:center; width:32px; height:32px; border:1px solid var(--accent); border-radius:9px; color:var(--accent); font-weight:900; }
-    .topline span { color:var(--mute); font-size: 12px; }
-    header { margin: 46px 0 34px; }
-    h1 { font-size: clamp(30px,5vw,58px); letter-spacing:-.035em; line-height:1.1; margin: 12px 0 16px; }
-    header p { max-width: 650px; color: var(--mute); margin:0; font-size: 16px; }
-    .grid { display:grid; grid-template-columns: 1.4fr .8fr; gap: 18px; }
-    .panel { background: linear-gradient(150deg,#202a37,#19212c); border:1px solid var(--line); border-radius:18px; padding:28px; min-width:0; }
-    .status { display:inline-flex; gap:8px; align-items:center; font-size:13px; color:var(--mute); }
-    .dot { width:8px; height:8px; border-radius:100%; background:#6c7e92; }
-    .dot.ready { background:#77cbb2; }
-    .show-title { margin:17px 0 8px; font-size: clamp(20px,3vw,29px); overflow-wrap:anywhere; }
-    .show-sub { margin:0 0 24px; color:var(--mute); overflow-wrap:anywhere; }
-    .stats { display:grid; grid-template-columns:repeat(3,1fr); margin: 20px 0; gap:10px; }
-    .stat { background:#111b25; border:1px solid #304055; border-radius:10px; padding:12px; }
-    .stat strong { font-size:22px; display:block; font-variant-numeric: tabular-nums; line-height:1.3; }
-    .stat small { color:var(--mute); font-size:12px; }
-    .actions { display:flex; flex-wrap:wrap; gap:10px; padding-top:5px; }
-    .action { border:1px solid var(--line); color:var(--ink); padding:10px 14px; border-radius:9px; background:#2d3d4d; text-decoration:none; font-weight:650; }
-    .action.primary { background: #afd9ed; color:#0d1a23; border-color:#afd9ed; }
-    .action:disabled, .action[aria-disabled="true"] { opacity:.45; pointer-events:none; }
-    .action:focus-visible, a:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
-    .tip { color:var(--mute); font-size:13px; }
-    h2 { font-size:17px; margin:0 0 12px; }
-    ol { padding-left:22px; margin:12px 0; } li { padding:5px 0; }
-    code { overflow-wrap:anywhere; color:#c4e5f7; font: 12px/1.6 ui-monospace,Consolas,monospace; }
-    .url { display:block; padding:13px 14px; border:1px solid var(--line); border-radius:10px; background:#111b25; margin:10px 0; }
-    .below { border-top:1px solid var(--line); margin-top:26px; padding-top:20px; color:var(--mute); font-size:13px; }
-    footer { margin-top:30px; color:var(--mute); font-size:12px; }
-    @media(max-width:750px) { .grid { grid-template-columns:1fr; } header { margin:32px 0 24px; } .panel { padding:20px; } .stats { gap:6px; } .stat { padding:9px; } }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="VRChat Stage Lighting Consoleの公演データを選択・確認・ダウンロード・名称編集します。">
+<title>公演データの保管庫 | Stage Lighting Console</title>
+<style>
+:root {color-scheme:dark;--bg:#10151d;--panel:#1b2531;--panel2:#15202b;--edge:#344459;--text:#edf4fb;--muted:#abc0d0;--blue:#a1d9f3;--green:#75d2b0;--danger:#ffc0b5;}
+* {box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at 70% -40%,#31465e 0%,transparent 60%),var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,"Meiryo",sans-serif}
+button,input,select{font:inherit}button,select,input[type=file]{cursor:pointer}
+button{border:1px solid var(--edge);background:#283a4c;color:var(--text);border-radius:9px;padding:10px 16px}
+button.primary{background:var(--blue);border-color:var(--blue);color:#0b1e2a;font-weight:750}
+button:disabled{opacity:.48;cursor:not-allowed}
+button:hover:not(:disabled){filter:brightness(1.11)}
+a{color:var(--blue)}
+:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
+h1{font-size:clamp(27px,5vw,49px);line-height:1.2;letter-spacing:-.03em;margin:11px 0}
+h2{font-size:20px;margin:0 0 12px}h3{font-size:16px;margin:0 0 10px}
+p{margin:8px 0}small{color:var(--muted)}
+header,main,footer{max-width:1200px;margin:auto;padding-left:22px;padding-right:22px}
+header{padding-top:33px;padding-bottom:21px}
+header .eyebrow{color:var(--blue);font:700 11px ui-monospace,Consolas,monospace;letter-spacing:.16em}
+header p{color:var(--muted);max-width:720px}
+main{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding-bottom:24px}
+section,aside{min-width:0}
+.panel{border:1px solid var(--edge);border-radius:15px;background:linear-gradient(145deg,#202c3a,#19232f);padding:21px}
+.panel+.panel{margin-top:15px}
+fieldset{padding:0;margin:0;border:0}
+label{display:block;font-size:13px;color:var(--muted);margin:12px 0 5px}
+select,input[type=text],input[type=number],input[type=file]{background:var(--panel2);border:1px solid var(--edge);border-radius:8px;color:var(--text);padding:10px 11px;max-width:100%;width:100%;min-width:0}
+input[type=file]{font-size:13px}
+select:disabled,input:disabled{opacity:.55}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.row>button{flex-grow:1}
+.muted{color:var(--muted)}.tiny{font-size:12px}
+.status{border-left:3px solid var(--blue);background:#132332;padding:11px 14px;border-radius:7px;min-height:46px}
+.status.error{border-left-color:var(--danger);color:#ffd6cc}
+.status.ok{border-left-color:var(--green)}
+.summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:16px 0}
+.stat{border:1px solid var(--edge);border-radius:9px;background:#14202d;padding:10px}
+.stat strong{font-size:23px;display:block;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted)}
+.divider{border-top:1px solid var(--edge);margin:18px 0}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.tabs button[aria-selected=true]{background:var(--blue);color:#10212c;font-weight:700}
+.hidden{display:none!important}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.actions{display:flex;gap:9px;flex-wrap:wrap;margin:15px 0}
+.actions button{min-width:145px}
+.data-source{font-size:13px;color:var(--muted);margin:8px 0;overflow-wrap:anywhere}
+.manifest{font:12px/1.6 ui-monospace,Consolas,monospace;color:#c7e8fa;overflow-wrap:anywhere;background:#0d1824;padding:9px;border-radius:8px}
+.editor-group{border:1px solid var(--edge);border-radius:10px;padding:13px;margin-top:11px;background:var(--panel2)}
+.editor-group header{padding:0;max-width:none}
+.editor-list{max-height:340px;overflow:auto;padding-right:4px}
+.editor-row{border-bottom:1px solid #304155;padding:10px 0}
+.editor-row:last-child{border:0}
+.editor-row .num{font-size:12px;color:var(--blue);font-weight:700}
+.editor-row .grid2 label{margin-top:5px}
+.note{padding:12px 14px;background:#142634;border:1px solid #345269;border-radius:9px;color:var(--muted)}
+code{font:12px/1.5 ui-monospace,Consolas,monospace;overflow-wrap:anywhere}
+footer{padding-bottom:55px;color:var(--muted);font-size:12px}
+@media(max-width:860px){main{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}.panel{padding:17px}}
+</style>
 </head>
 <body>
-<div class="shell">
-  <nav class="topline" aria-label="サイト">
-    <div class="brand"><div class="brand-mark" aria-hidden="true">S</div> STAGE LIGHTING CONSOLE</div>
-    <span>SHOW DATA DELIVERY / VRCHAT</span>
-  </nav>
-  <header>
-    <div class="eyebrow">Public Show Library</div>
-    <h1>公演データの保管庫</h1>
-    <p>VRChatで制作した照明CueをPCで編集し、公開用のShow Packとして配信するためのページです。公演データは担当者の確認後に公開されます。</p>
-  </header>
-  <main class="grid">
-    <section class="panel" aria-labelledby="show-section">
-      <div class="status" role="status"><span id="status-dot" class="dot"></span><span id="status">公開データを確認中…</span></div>
-      <h2 class="show-title" id="show-section">最新の公演データ</h2>
-      <p id="show-description" class="show-sub">GitHub Pagesに公開されたShow Packを取得します。</p>
-      <div class="stats" aria-label="Show情報">
-        <div class="stat"><strong id="cue-count">—</strong><small>Cues</small></div>
-        <div class="stat"><strong id="release-revision">—</strong><small>Release</small></div>
-        <div class="stat"><strong id="schema">—</strong><small>Schema</small></div>
-      </div>
-      <div class="actions">
-        <a id="json-open" class="action primary" href="./show-pack.json" aria-disabled="true">JSONを開く</a>
-        <button id="copy-url" class="action" type="button" disabled>VRChat用URLをコピー</button>
-        <button id="refresh" class="action" type="button">更新を確認</button>
-      </div>
-      <p class="tip" id="detail">まだ公演データは公開されていません。公開前のリハーサルデータはここには置かないでください。</p>
-    </section>
-    <aside class="panel" aria-labelledby="how-to">
-      <h2 id="how-to">VRChatへの取り込み</h2>
-      <ol>
-        <li>このページで公開版のCue数とReleaseを確認。</li>
-        <li>「VRChat用URLをコピー」を押す。</li>
-        <li>ワールド内のSHOW管理 → REMOTEにURLを入力。</li>
-        <li>取得 → 検証・比較 → 確認 → 取込確定。</li>
-      </ol>
-      <h2>固定の取得先</h2>
-      <code id="url" class="url"></code>
-      <p class="tip">このURLは最新の公開版1件を返します。複数公演の一覧や同時管理は後続バージョンで対応予定です。</p>
-    </aside>
-  </main>
-  <div class="below">
-    <strong>公開範囲について</strong>
-    <p>このサイトと <code>show-pack.json</code> は一般公開されます。リハーサルの未公開情報、個人情報、秘密の演出データを含む場合は公開しないでください。配信されるFNVハッシュは破損検出用で、作者を保証する署名ではありません。</p>
-    <p>PC受取・編集ツールからGitHubへの書込みを行うには、別途GitHub CLIでのログインが必要です。Webページ自体にGitHubへの書込み機能はありません。</p>
-  </div>
-  <footer>Stage Lighting Console · Show Pack v1 · Read-only Public Delivery</footer>
+<header>
+<div class="eyebrow">STAGE LIGHTING CONSOLE / SHOW LIBRARY</div>
+<h1>公演データの保管庫</h1>
+<p>VRChatで制作した公演を作品・版ごとに選び、必要なJSONだけをダウンロード。公演名・Act名・Cue名の編集は、元データを残したまま新しいJSONとして保存できます。</p>
+</header>
+<main>
+<aside>
+<section class="panel">
+<h2>公演を選択</h2>
+<small>ここに表示されるのはGitHub Pagesで公開済みの公演だけです。</small>
+<label for="show-select">作品</label><select id="show-select" disabled><option>公開公演はまだありません</option></select>
+<label for="revision-select">バージョン</label><select id="revision-select" disabled><option>バージョンを選択</option></select>
+<p id="publication-status" class="data-source">公開情報を確認中…</p>
+<div class="actions">
+<button id="load-public" disabled>選択版を読み込む</button>
+<button id="refresh-catalog">一覧を更新</button>
 </div>
-<script>
-(() => {
-  "use strict";
-  const $ = id => document.getElementById(id);
-  const packURL = new URL("./show-pack.json", location.href).href;
-  $("url").textContent = packURL;
-  const number = value => Number.isSafeInteger(value) && value >= 0 ? String(value) : "—";
-  function state(text, ready) {
-    $("status").textContent = text;
-    $("status-dot").classList.toggle("ready", ready);
-    $("copy-url").disabled = !ready;
-    $("json-open").setAttribute("aria-disabled", String(!ready));
-  }
-  async function loadPack() {
-    state("公開データを確認中…", false);
-    $("detail").textContent = "GitHub Pagesの配信内容を確認しています。";
-    try {
-      const response = await fetch(packURL, { cache:"no-store" });
-      if (!response.ok) {
-        if (response.status === 404) {
-          state("まだ公演データはありません", false);
-          $("show-description").textContent = "最初の公開用Show Packを待っています。";
-          $("detail").textContent = "公演データの公開はPC用Show Managerから明示操作した場合のみ行われます。";
-          return;
-        }
-        throw new Error("HTTP " + response.status);
-      }
-      const data = await response.json();
-      if (data?.format !== "stage-lighting-show-pack" || data?.packVersion !== 1 ||
-          typeof data.showId !== "string" || typeof data.displayName !== "string" ||
-          typeof data.payloadBase64 !== "string" || !Number.isInteger(data.cueCount) ||
-          !Number.isInteger(data.releaseRevision)) throw new Error("Show Pack形式を確認できません");
-      $("show-section").textContent = data.displayName || "公開中の公演";
-      $("show-description").textContent = "Show ID: " + data.showId;
-      $("cue-count").textContent = number(data.cueCount);
-      $("release-revision").textContent = number(data.releaseRevision);
-      $("schema").textContent = number(data.dataSchema);
-      $("detail").textContent = "最新公開版です。取り込み前にVRChatのREMOTE画面でも必ず検証してください。";
-      state("Show Pack公開中", true);
-    } catch (error) {
-      state("取得できませんでした", false);
-      $("show-description").textContent = "公演データを読み込めませんでした。";
-      $("detail").textContent = "ネットワーク・Pages配信設定・JSON形式を確認してください。詳細: " + String(error?.message ?? error);
-    }
-  }
-  $("copy-url").addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(packURL);
-      $("copy-url").textContent = "コピーしました";
-      $("copy-url").blur();
-    } catch {
-      $("detail").textContent = "コピーできない環境です。右の固定URLを選択してコピーしてください。";
-    }
-  });
-  $("refresh").addEventListener("click", loadPack);
-  loadPack();
-})();
-</script>
+<div class="divider"></div>
+<h3>手元のJSONを開く</h3>
+<p class="tiny muted">Windows受取ツールで保存したJSONを読み込めます。アップロードしてもサーバーには送信されず、ブラウザ内で処理します。</p>
+<label for="file-input">Remote Pack JSON</label>
+<input id="file-input" type="file" accept=".json,application/json">
+</section>
+<section class="panel">
+<h3>データの扱い</h3>
+<p class="tiny muted">公開サイトのデータは誰でも閲覧できます。未公開の台本・演出・個人情報を含むJSONは公開しないでください。</p>
+<p class="tiny muted">一般の閲覧者には公開操作を提供しません。GitHubへの公開には管理者本人による別途認証と確認が必要です。</p>
+</section>
+</aside>
+<section>
+<div class="panel">
+<div id="status" class="status" role="status" aria-live="polite">公開カタログを確認しています…</div>
+<div class="tabs" role="tablist" aria-label="ライブラリ画面" style="margin-top:17px">
+<button id="tab-view" type="button" role="tab" aria-selected="true">データ確認・ダウンロード</button>
+<button id="tab-edit" type="button" role="tab" aria-selected="false">名称エディター</button>
+</div>
+<div id="view">
+<h2 id="current-title">公演データが未選択です</h2>
+<p id="current-source" class="data-source">公開一覧から選択するか、JSONを開いてください。</p>
+<div class="summary">
+<div class="stat"><strong id="cue-count">—</strong><span>Cues</span></div>
+<div class="stat"><strong id="release-count">—</strong><span>Release</span></div>
+<div class="stat"><strong id="schema-count">—</strong><span>Schema</span></div>
+</div>
+<p id="selected-description" class="muted">公開済みのReleaseは固定URLで取得できます。新しい版を作成しても過去の版は変更されません。</p>
+<div class="actions">
+<button class="primary" id="download-original" disabled>選択データをJSON保存</button>
+<button id="copy-url" disabled>VRChat用URLをコピー</button>
+</div>
+<label>選択版の配信URL</label>
+<div id="public-url" class="manifest">未選択（ローカルJSONにはURLがありません）</div>
+<div class="divider"></div>
+<div class="note">VRChatに戻すときは SHOW → REMOTE → URL取得 → 比較・検証 → 明示的に取込確定。本番中に自動でLIVEへ適用されることはありません。</div>
+</div>
+<div id="edit" class="hidden">
+<h2>名称エディター</h2>
+<p class="muted tiny">編集できるのは公演名・Act名・Cue名（日英）だけ。Cue UID・Act割当・Fixture・Timing・LOOK・FOLLOWのデータはバイト単位で維持します。</p>
+<fieldset id="edit-fields" disabled>
+<div class="grid2">
+<div><label for="display-name">公開用表示名</label><input id="display-name" type="text" maxlength="64"></div>
+<div><label for="release-number">新しいRelease番号</label><input id="release-number" type="number" min="1" max="2147483647"></div>
+<div><label for="show-jp">公演名（日本語）</label><input id="show-jp" type="text" maxlength="256"></div>
+<div><label for="show-en">公演名（English）</label><input id="show-en" type="text" maxlength="256"></div>
+</div>
+<section class="editor-group"><h3>Act名</h3><div id="act-list" class="editor-list"><small>公演データを読み込んでください。</small></div></section>
+<section class="editor-group"><h3>Cue名</h3><div id="cue-list" class="editor-list"><small>公演データを読み込んでください。</small></div></section>
+<div class="actions"><button type="button" class="primary" id="download-edit">編集版JSONを別名ダウンロード</button><button type="button" id="discard">編集を取り消す</button></div>
+</fieldset>
+<div class="note">この画面の「保存」は**PCへのダウンロードのみ**です。公開中のJSONや過去のReleaseを自動変更しません。新しい版をGitHubへ公開する操作は、PC管理ツール側の認証・確認が必要です。</div>
+</div>
+</div>
+</section>
+</main>
+<footer>Stage Lighting Console · Show Library v2 preview · 公演の公開と本番適用は別操作</footer>
+<script type="module" src="./show-library-app.mjs"></script>
 </body>
 </html>
