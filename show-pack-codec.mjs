@@ -1,4 +1,4 @@
-// Stage Lighting Console Remote Pack v1 — browser-safe lossless NAME editor.
+// Stage Lighting Console Remote Pack v1 — browser-safe lossless metadata editor.
 // Source compatibility: StageLightingShowData.BuildSnapshot / ComputeHash.
 // This module never calls GitHub APIs or changes working LIVE/VRChat state.
 export const MAX_JSON_BYTES = 1_400_000;
@@ -167,14 +167,34 @@ export function exportEditedPack(source,{displayName,showJp,showEn,acts,cues,rev
   if(!isInt(revision,pack.releaseRevision+1,MAX_INT))fail("Releaseは元データより大きい番号を指定してください");
   if(!isInt(pack.workingRevision+1,0,MAX_INT-1))fail("Working Revision上限です");
   nameCheck(displayName,64);nameCheck(showJp);nameCheck(showEn);
-  if(!Array.isArray(acts)||acts.length!==source.acts.length||!Array.isArray(cues)||cues.length!==source.cues.length)fail("Act/Cue件数の変更は禁止です");
+  if(!Array.isArray(acts)||acts.length>256||!Array.isArray(cues)||cues.length!==source.cues.length)
+    fail("Act上限またはCue件数が不正です");
+  const originalActIds=new Set(source.acts.map(a=>a.uid));
+  const newActIds=new Set();
+  for(const act of acts){
+    nameCheck(act.uid,64);
+    if(!act.uid||newActIds.has(act.uid))fail("Act UIDが空または重複しています");
+    newActIds.add(act.uid);
+  }
+  // Existing Act IDs must retain their relative order; newly created Acts
+  // append only. Removing an Act is allowed only if all its Cues are moved.
+  const kept=acts.filter(a=>originalActIds.has(a.uid)).map(a=>a.uid);
+  const expected=source.acts.filter(a=>newActIds.has(a.uid)).map(a=>a.uid);
+  if(kept.length!==expected.length||kept.some((id,i)=>id!==expected[i]))
+    fail("既存ActのID・並び順を変更できません");
+  let newActSeen=false;
+  for(const act of acts){
+    if(!originalActIds.has(act.uid))newActSeen=true;
+    else if(newActSeen)fail("新しいActは一覧の末尾に追加してください");
+  }
   const pieces=[body.subarray(0,prefixEnd),strBytes(showJp),strBytes(showEn),intBytes(acts.length)];
-  for(let i=0;i<acts.length;i++){
-    if(acts[i].uid!==source.acts[i].uid)fail("Act UIDを変更できません");
-    pieces.push(strBytes(acts[i].uid),strBytes(nameCheck(acts[i].jp)),strBytes(nameCheck(acts[i].en)));
+  for(const act of acts){
+    pieces.push(strBytes(act.uid),strBytes(nameCheck(act.jp)),strBytes(nameCheck(act.en)));
   }
   for(let i=0;i<cues.length;i++){
-    if(cues[i].uid!==source.cues[i].uid||cues[i].actUid!==source.cues[i].actUid)fail("Cue UID/Act割当を変更できません");
+    if(cues[i].uid!==source.cues[i].uid)fail("CueのUID・元の再生順を変更できません");
+    if(typeof cues[i].actUid!=="string"||(cues[i].actUid&&!newActIds.has(cues[i].actUid)))
+      fail("Cueの所属Actが見つかりません");
     pieces.push(strBytes(nameCheck(cues[i].jp)),strBytes(nameCheck(cues[i].en)),strBytes(cues[i].actUid));
   }
   pieces.push(body.subarray(suffixStart));
@@ -188,6 +208,9 @@ export function exportEditedPack(source,{displayName,showJp,showEn,acts,cues,rev
   const check=readPack(json);
   if(!sameBytes(result.subarray(0,prefixEnd),body.subarray(0,prefixEnd)) ||
      !sameBytes(result.subarray(result.length-(body.length-suffixStart)),body.subarray(suffixStart)) ||
-     check.cues.some((c,i)=>c.uid!==source.cues[i].uid||c.actUid!==source.cues[i].actUid)) fail("照明・UID・後続データの維持検証に失敗しました");
+     check.acts.length!==acts.length ||
+     check.acts.some((a,i)=>a.uid!==acts[i].uid||a.jp!==acts[i].jp||a.en!==acts[i].en) ||
+     check.cues.some((c,i)=>c.uid!==source.cues[i].uid||c.jp!==cues[i].jp||c.en!==cues[i].en||
+       c.actUid!==cues[i].actUid)) fail("照明・UID・後続データの維持検証に失敗しました");
   return json;
 }

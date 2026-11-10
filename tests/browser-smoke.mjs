@@ -93,6 +93,16 @@ try{
   assert.equal(await page.locator("#edit-panel").isVisible(),true);
   assert.match(await page.textContent("#fixed-name"),/くるみ割り人形/);
   assert.match(await page.textContent(".note"),/編集したデータは、管理者（神無月瑪瑙）に渡してください。/);
+  page.once("dialog",dialog=>dialog.accept("第二幕"));
+  await page.click("#add-act");
+  const newActUID=await page.locator('[data-cue-act="0"] option').last().getAttribute("value");
+  assert.ok(newActUID.startsWith("act_"));
+  await page.selectOption('[data-cue-act="0"]',newActUID);
+  await page.click("#tab-preview");
+  assert.match(await page.textContent("#preview-cues"),/Act 2/);
+  assert.match(await page.textContent("#preview-cues"),/第二幕/);
+  assert.match(await page.textContent("#preview-cues"),/Cue 001/);
+  await page.click("#tab-edit");
   await page.fill("#show-jp","本番用公演");
   await page.click("#tab-preview");
   assert.match(await page.textContent("#preview-show"),/本番用公演/);
@@ -107,10 +117,14 @@ try{
   assert.equal(edited.pack.releaseRevision,2);
   assert.equal(edited.pack.cueCount,1);
   assert.equal(edited.cues[0].uid,"cue-1");
+  assert.equal(edited.acts.length,2);
+  assert.equal(edited.acts[1].jp,"第二幕");
+  assert.equal(edited.cues[0].actUid,edited.acts[1].uid);
   assert.equal(await page.inputValue("#show-jp"),"本番用公演");
   assert.equal(await page.getAttribute("#tab-preview","aria-selected"),"true");
   assert.equal(await page.locator("#edit-panel").isHidden(),true);
   assert.match(await page.textContent("#preview-show"),/本番用公演/);
+  assert.match(await page.textContent("#preview-cues"),/第二幕/);
   assert.match(await page.textContent("#status"),/管理者（神無月瑪瑙）/);
   assert.deepEqual(errors,[]);
   // GitHub's update-date API may stall indefinitely on some connections.

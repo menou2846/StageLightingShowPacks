@@ -1,10 +1,11 @@
-import {readPack,exportEditedPack,MAX_JSON_BYTES} from "./show-pack-codec.mjs";
+import {readPack,exportEditedPack,MAX_JSON_BYTES,nameCheck} from "./show-pack-codec.mjs";
 import {readCatalog,releaseURL} from "./show-library-catalog.mjs";
 
 const el=id=>document.getElementById(id);
 const home=new URL("./",document.baseURI);
 const GITHUB_COMMITS="https://api.github.com/repos/menou2846/StageLightingShowPacks/commits?path=show-pack.json&per_page=1";
 let source=null,sourceJSON=null,sourceName="",dirty=false;
+let draftActs=[],draftCues=[];
 let catalog=null,selectedShow=null,selectedRelease=null,currentFixed=null;
 const releaseText=n=>"R"+String(n).padStart(4,"0");
 // Pages JSON requests also have a bounded wait. A failed request leaves
@@ -20,11 +21,21 @@ function setStatus(message,error=false){
   el("status").textContent=message;
   el("status").className="status "+(error?"error":"ok");
 }
+function syncDraftText(){
+  if(!source)return;
+  draftActs.forEach((act,i)=>{
+    act.jp=field("act-"+i+"-jp");act.en=field("act-"+i+"-en");
+  });
+  draftCues.forEach((cue,i)=>{
+    cue.jp=field("cue-"+i+"-jp");cue.en=field("cue-"+i+"-en");
+  });
+}
 function changed(){
   if(!source)return;
+  syncDraftText();
   dirty=true;
   renderPreview();
-  setStatus("名称を編集中です。編集後は「編集したJSONを保存」を押してください。");
+  setStatus("名前・Act構成を編集中です。保存するとPCに新しいJSONを作成します。");
 }
 function switchPage(which){
   const edit=which==="edit"&&Boolean(source)&&source.pack.dataSchema>=2;
@@ -44,25 +55,46 @@ function appendPreviewEntry(root,heading,jp,en){
 }
 function renderPreview(){
   if(!source)return;
-  const fromEdit=dirty;
-  const displayName=fromEdit?el("display-name").value:source.pack.displayName;
-  const showJp=fromEdit?el("show-jp").value:source.showJp;
-  const showEn=fromEdit?el("show-en").value:source.showEn;
+  const displayName=dirty?el("display-name").value:source.pack.displayName;
+  const showJp=dirty?el("show-jp").value:source.showJp;
+  const showEn=dirty?el("show-en").value:source.showEn;
+  const currentActs=dirty?draftActs:source.acts;
+  const currentCues=dirty?draftCues:source.cues;
   const show=el("preview-show");show.replaceChildren();
   appendPreviewEntry(show,displayName||"公演名",showJp,showEn);
   const acts=el("preview-acts");acts.replaceChildren();
   const cues=el("preview-cues");cues.replaceChildren();
-  source.acts.forEach((act,i)=>appendPreviewEntry(acts,"Act "+(i+1),
-    fromEdit?field("act-"+i+"-jp"):act.jp,
-    fromEdit?field("act-"+i+"-en"):act.en));
-  source.cues.forEach((cue,i)=>appendPreviewEntry(cues,"Cue "+String(i+1).padStart(3,"0"),
-    fromEdit?field("cue-"+i+"-jp"):cue.jp,
-    fromEdit?field("cue-"+i+"-en"):cue.en));
-  if(!source.acts.length)acts.textContent="Actはありません。";
-  if(!source.cues.length)cues.textContent="Cueはありません。";
-  el("preview-notice").textContent=fromEdit?
-    "未保存の編集内容をプレビューしています。PCへ保存するには「名称を編集」画面に戻って保存してください。":
-    "JSONの名称を確認しています。照明やCueの動作は再生しません。";
+  currentActs.forEach((act,i)=>appendPreviewEntry(acts,"Act "+(i+1),act.jp,act.en));
+  for(const [i,act] of currentActs.entries()){
+    const group=document.createElement("div");group.className="preview-act";
+    const title=document.createElement("div");title.className="preview-act-title";
+    title.textContent="Act "+(i+1)+"  "+(act.jp||act.en||"（無題）");
+    group.append(title);
+    currentCues.forEach((cue,n)=>{
+      if(cue.actUid===act.uid)
+        appendPreviewEntry(group,"Cue "+String(n+1).padStart(3,"0"),cue.jp,cue.en);
+    });
+    if(!currentCues.some(c=>c.actUid===act.uid)){
+      const empty=document.createElement("p");empty.className="tiny";
+      empty.textContent="Cueなし";group.append(empty);
+    }
+    cues.append(group);
+  }
+  const unassigned=currentCues.filter(c=>!c.actUid);
+  if(unassigned.length){
+    const group=document.createElement("div");group.className="preview-act";
+    const title=document.createElement("div");title.className="preview-act-title";
+    title.textContent="Act未割り当て";group.append(title);
+    currentCues.forEach((cue,n)=>{
+      if(!cue.actUid)appendPreviewEntry(group,"Cue "+String(n+1).padStart(3,"0"),cue.jp,cue.en);
+    });
+    cues.append(group);
+  }
+  if(!currentActs.length)acts.textContent="Actはありません。";
+  if(!currentCues.length)cues.textContent="Cueはありません。";
+  el("preview-notice").textContent=dirty?
+    "未保存の編集内容をプレビューしています。PCへ保存するには編集画面へ戻って保存してください。":
+    "JSON内のActとCueの所属関係を表示しています。照明・Cueの動作は再生しません。";
 }
 function confirmSwitch(){
   return !dirty||window.confirm("未保存の名称編集があります。変更を破棄して別のJSONを開きますか？");
@@ -102,8 +134,70 @@ function renderRows(target,items,prefix){
     const fields=document.createElement("div");fields.className="grid";
     textField(fields,"日本語",item.jp,prefix+"-"+i+"-jp");
     textField(fields,"English",item.en,prefix+"-"+i+"-en");
-    row.append(heading,fields);root.append(row);
+    row.append(heading,fields);
+    if(prefix==="cue"){
+      const label=document.createElement("label");label.textContent="所属Act";
+      const select=document.createElement("select");
+      select.dataset.cueAct=String(i);
+      select.add(new Option("（Act未割り当て）",""));
+      draftActs.forEach((act,j)=>select.add(new Option(
+        "Act "+(j+1)+"： "+(act.jp||act.en||"（無題）"),act.uid
+      )));
+      select.value=item.actUid;
+      select.addEventListener("change",()=>{
+        syncDraftText();
+        draftCues[i].actUid=select.value;
+        changed();
+        // Refresh Act deletion guards after moving the Cue.
+        renderRows("act-list",draftActs,"act");
+      });
+      row.append(label,select);
+    }else{
+      const button=document.createElement("button");
+      button.type="button";button.className="ghost remove-act";
+      button.textContent="このActを削除";
+      const used=draftCues.some(c=>c.actUid===item.uid);
+      button.disabled=used;
+      if(used)button.title="所属Cueを別のActへ移動すると削除できます";
+      button.addEventListener("click",()=>removeAct(i));
+      row.append(button);
+    }
+    root.append(row);
   }
+}
+function addAct(){
+  if(!source)return;
+  syncDraftText();
+  const proposal=window.prompt("追加するAct名を入力してください。","Act "+(draftActs.length+1));
+  if(proposal===null)return;
+  let title;
+  try{title=nameCheck(proposal.trim());}
+  catch(error){setStatus(error.message,true);return;}
+  if(!title){setStatus("Act名を入力してください。",true);return;}
+  if(draftActs.length>=256){setStatus("Actは最大256件です。",true);return;}
+  let uid;
+  do{
+    uid="act_"+crypto.randomUUID().replace(/-/g,"").slice(0,20);
+  }while(draftActs.some(act=>act.uid===uid)||source.acts.some(act=>act.uid===uid));
+  draftActs.push({uid,jp:title,en:""});
+  renderRows("act-list",draftActs,"act");
+  renderRows("cue-list",draftCues,"cue");
+  changed();
+}
+function removeAct(index){
+  if(!source)return;
+  syncDraftText();
+  const act=draftActs[index];
+  if(!act)return;
+  if(draftCues.some(c=>c.actUid===act.uid)){
+    setStatus("Cueが所属するActは削除できません。別のActへ移動してください。",true);
+    return;
+  }
+  if(!window.confirm("空のAct「"+(act.jp||act.en)+"」を削除しますか？"))return;
+  draftActs.splice(index,1);
+  renderRows("act-list",draftActs,"act");
+  renderRows("cue-list",draftCues,"cue");
+  changed();
 }
 function latestRelease(showId,from){
   const releases=catalog?.shows.find(s=>s.showId===showId)?.releases??[];
@@ -112,6 +206,8 @@ function latestRelease(showId,from){
 }
 function formSource(doc,label){
   source=doc;sourceName=label;dirty=false;
+  draftActs=doc.acts.map(a=>({...a}));
+  draftCues=doc.cues.map(c=>({...c}));
   el("editor-fields").disabled=doc.pack.dataSchema<2;
   el("editor-title").textContent=doc.pack.displayName||doc.showJp||"名前のない公演";
   el("source-info").textContent=label;
@@ -122,8 +218,8 @@ function formSource(doc,label){
   el("display-name").value=doc.pack.displayName||"";
   el("show-jp").value=doc.showJp||"";
   el("show-en").value=doc.showEn||"";
-  renderRows("act-list",doc.acts,"act");
-  renderRows("cue-list",doc.cues,"cue");
+  renderRows("act-list",draftActs,"act");
+  renderRows("cue-list",draftCues,"cue");
   el("tab-edit").disabled=doc.pack.dataSchema<2;
   el("start-edit").disabled=doc.pack.dataSchema<2;
   renderPreview();
@@ -133,7 +229,7 @@ function formSource(doc,label){
   el("release-hint").textContent="元："+releaseText(doc.pack.releaseRevision)+
     (next<=2147483647?" → 保存時："+releaseText(next):"（Release番号の上限です）");
   if(doc.pack.dataSchema<2)setStatus("このJSONは古いSchema 1です。名称編集にはSchema 2以上が必要です。",true);
-  else setStatus("JSONを開きました。公演・Act・Cueの名前を編集できます。");
+  else setStatus("JSONを開きました。ActとCueの所属をプレビューできます。");
 }
 function openData(raw,label){
   const doc=readPack(raw);
@@ -145,13 +241,15 @@ function save(){
   if(!source||source.pack.dataSchema<2)return;
   try{
     const revision=Number(el("release-number").value);
-    const acts=source.acts.map((act,i)=>({...act,jp:field("act-"+i+"-jp"),en:field("act-"+i+"-en")}));
-    const cues=source.cues.map((cue,i)=>({...cue,jp:field("cue-"+i+"-jp"),en:field("cue-"+i+"-en")}));
+    syncDraftText();
+    const acts=draftActs.map(a=>({...a}));
+    const cues=draftCues.map(c=>({...c}));
     const displayName=el("display-name").value,showJp=el("show-jp").value,showEn=el("show-en").value;
-    const changedNames=displayName!==source.displayName||showJp!==source.showJp||showEn!==source.showEn||
-      acts.some((act,i)=>act.jp!==source.acts[i].jp||act.en!==source.acts[i].en)||
-      cues.some((cue,i)=>cue.jp!==source.cues[i].jp||cue.en!==source.cues[i].en);
-    if(!changedNames){setStatus("名前の変更がありません。編集してから保存してください。",true);return;}
+    const changedData=displayName!==source.displayName||showJp!==source.showJp||showEn!==source.showEn||
+      acts.length!==source.acts.length||
+      acts.some((act,i)=>act.uid!==source.acts[i]?.uid||act.jp!==source.acts[i]?.jp||act.en!==source.acts[i]?.en)||
+      cues.some((cue,i)=>cue.jp!==source.cues[i].jp||cue.en!==source.cues[i].en||cue.actUid!==source.cues[i].actUid);
+    if(!changedData){setStatus("名前やAct構成の変更がありません。編集してから保存してください。",true);return;}
     const raw=exportEditedPack(source,{displayName,showJp,showEn,acts,cues,revision});
     const updated=readPack(raw);
     if(!window.confirm("変更したJSONをPCに保存しますか？\n元のJSONやGitHubの公開データは変更されません。"))return;
@@ -163,7 +261,7 @@ function save(){
 }
 function resetEdits(){
   if(!sourceJSON)return;
-  if(dirty&&!window.confirm("編集した名称を元に戻しますか？"))return;
+  if(dirty&&!window.confirm("編集した名前とAct構成を元に戻しますか？"))return;
   try{formSource(readPack(sourceJSON),sourceName);}catch(error){setStatus(error.message,true);}
 }
 function selectRelease(){
@@ -306,5 +404,6 @@ el("load-public").addEventListener("click",loadSelected);
 el("refresh-public").addEventListener("click",refresh);
 el("download-edit").addEventListener("click",save);
 el("discard").addEventListener("click",resetEdits);
+el("add-act").addEventListener("click",addAct);
 for(const id of ["display-name","show-jp","show-en"])el(id).addEventListener("input",changed);
 refresh();
