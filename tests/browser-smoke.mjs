@@ -52,53 +52,49 @@ try{
   const page=await browser.newPage({acceptDownloads:true});
   const errors=[];
   page.on("pageerror",err=>errors.push(String(err)));
+  await page.route("https://api.github.com/repos/menou2846/StageLightingShowPacks/commits?*",async route=>{
+    await route.fulfill({
+      status:200,contentType:"application/json",
+      body:JSON.stringify([{commit:{committer:{date:"2026-11-10T12:00:00Z"}}}])
+    });
+  });
   await page.goto("http://127.0.0.1:"+port+"/");
-  await page.waitForFunction(()=>document.querySelector("#status")?.textContent.includes("固定配信と保存履歴"));
-  assert.equal(await page.locator("#show-cards .show-card").count(),1);
-  assert.match(await page.textContent("#live-card"),/固定配信/);
-  assert.equal(await page.isDisabled("#copy-url"),true);
-  assert.equal(await page.isDisabled("#download-original"),true);
-  // The old fixed URL must be recognizable as the current published release.
-  await page.click("#show-cards .show-card");
-  await page.waitForFunction(()=>document.querySelector("#current-title")?.textContent==="くるみ割り人形");
-  assert.equal(await page.textContent("#loaded-version"),"R0002");
-  assert.equal(await page.textContent("#fixed-version"),"R0002");
-  assert.match(await page.textContent("#version-relation"),/同じ版/);
-  // File is processed locally. No outbound HTTP calls, no GitHub authentication.
+  await page.waitForFunction(()=>document.querySelector("#status")?.textContent.includes("JSONを選んで"));
+  assert.equal(await page.locator("#editor-fields").isDisabled(),true);
+  assert.equal(await page.locator("#tab-manage").count(),0);
+  assert.equal(await page.locator("#admin-token").count(),0);
+  assert.equal(await page.locator("#stage-status").count(),0);
+  assert.equal(await page.textContent("#fixed-name"),"くるみ割り人形");
+  assert.match(await page.textContent("#fixed-updated"),/2026\/11\/10/);
+  assert.match(await page.textContent("#fixed-updated"),/21:00/);
+  // Confirm fixed SHOW can be read and edited without publishing or tokens.
+  await page.click("#load-public");
+  await page.waitForFunction(()=>document.querySelector("#editor-title")?.textContent==="くるみ割り人形");
+  assert.equal(await page.inputValue("#release-number"),"3");
+  assert.equal(await page.locator("#editor-fields").isDisabled(),false);
   const sample=mockPack();
-  await page.setInputFiles("#file-input",[{name:"rehearsal.json",mimeType:"application/json",buffer:Buffer.from(sample,"utf8")}]);
-  await page.waitForFunction(()=>document.querySelector("#current-title").textContent==="テスト用");
-  assert.equal(await page.isDisabled("#copy-url"),true);
-  assert.equal(await page.isDisabled("#download-original"),false);
-  assert.equal(await page.textContent("#loaded-version"),"R0001");
-  assert.match(await page.textContent("#fixed-version"),/R0002.*別公演/);
-  assert.match(await page.textContent("#version-relation"),/別公演/);
-  await page.click("#tab-edit");
-  assert.equal(await page.inputValue("#release-number"),"2");
-  assert.match(await page.textContent("#release-hint"),/R0002/);
+  await page.setInputFiles("#file-input",[{
+    name:"rehearsal.json",mimeType:"application/json",buffer:Buffer.from(sample,"utf8")
+  }]);
+  await page.waitForFunction(()=>document.querySelector("#editor-title")?.textContent==="テスト用");
   assert.equal(await page.inputValue("#show-jp"),"公演サンプル");
+  assert.equal(await page.inputValue("#release-number"),"2");
+  assert.match(await page.textContent("#fixed-name"),/くるみ割り人形/);
+  assert.match(await page.textContent(".note"),/編集したデータは、管理者（神無月瑪瑙）に渡してください。/);
   await page.fill("#show-jp","本番用公演");
-  await page.fill("#release-number","2");
   page.on("dialog",dialog=>dialog.accept());
   const downloadPromise=page.waitForEvent("download");
   await page.click("#download-edit");
   const download=await downloadPromise;
-  const file=await download.path();
-  const edited=readPack(await readFile(file));
+  const edited=readPack(await readFile(await download.path()));
   assert.equal(edited.showJp,"本番用公演");
   assert.equal(edited.pack.releaseRevision,2);
-  assert.equal(await page.textContent("#loaded-version"),"R0002");
   assert.equal(edited.pack.cueCount,1);
   assert.equal(edited.cues[0].uid,"cue-1");
-  assert.equal(await page.locator("#tab-manage").count(),0);
-  assert.equal(await page.locator("#admin-token").count(),0);
-  assert.equal(await page.getAttribute("#tab-edit","aria-selected"),"true");
-  assert.match(await page.textContent("#editor-context"),/R0002/);
-  assert.match(await page.textContent("#stage-status"),/リハーサル/);
-  assert.match(await page.textContent("#stage-status"),/登録なし/);
-  assert.match(await page.textContent("#live-card"),/区分/);
+  assert.equal(await page.inputValue("#show-jp"),"本番用公演");
+  assert.match(await page.textContent("#status"),/管理者（神無月瑪瑙）/);
   assert.deepEqual(errors,[]);
-  console.log("Browser smoke PASS: fixed-release comparison, uploaded JSON version, safe edit and download");
+  console.log("Browser smoke PASS: simple editor, fixed SHOW name/date, local JSON editing/download");
 }finally{
   if(browser)await browser.close();
   await new Promise(resolve=>server.close(resolve));
