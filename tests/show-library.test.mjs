@@ -98,6 +98,7 @@ test("Act deletion requires relocating Cues and rejects corrupt assignments",()=
   const fields={displayName:base.displayName,showJp:base.showJp,showEn:base.showEn,revision:6};
   assert.throws(()=>exportEditedPack(base,{...fields,acts:[],cues:base.cues}),/所属Act/);
   assert.throws(()=>exportEditedPack(base,{...fields,acts:[...base.acts,base.acts[0]],cues:base.cues}),/重複/);
+  assert.throws(()=>exportEditedPack(base,{...fields,acts:[{uid:"act_new",jp:"新しい幕",en:""},...base.acts],cues:base.cues}),/末尾/);
   const moved=base.cues.map(c=>({...c,actUid:""}));
   const cleared=readPack(exportEditedPack(base,{...fields,acts:[],cues:moved}));
   assert.equal(cleared.acts.length,0);
