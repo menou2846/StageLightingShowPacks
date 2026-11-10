@@ -60,7 +60,7 @@ try{
   });
   await page.goto("http://127.0.0.1:"+port+"/");
   await page.waitForFunction(()=>document.querySelector("#status")?.textContent.includes("JSONを選んで"));
-  assert.equal(await page.locator("#editor-fields").isDisabled(),true);
+  assert.equal(await page.locator("#show-jp").isDisabled(),true);
   assert.equal(await page.getAttribute("#tab-preview","aria-selected"),"true");
   assert.equal(await page.isDisabled("#tab-edit"),true);
   assert.equal(await page.locator("#tab-manage").count(),0);
@@ -73,7 +73,7 @@ try{
   await page.click("#load-public");
   await page.waitForFunction(()=>document.querySelector("#editor-title")?.textContent==="くるみ割り人形");
   assert.equal(await page.inputValue("#release-number"),"3");
-  assert.equal(await page.locator("#editor-fields").isDisabled(),false);
+  assert.equal(await page.locator("#show-jp").isDisabled(),false);
   assert.equal(await page.getAttribute("#tab-preview","aria-selected"),"true");
   assert.equal(await page.locator("#edit-panel").isHidden(),true);
   assert.match(await page.textContent("#preview-cues"),/Cue 001/);
