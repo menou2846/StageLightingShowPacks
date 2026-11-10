@@ -58,13 +58,24 @@ try{
   assert.match(await page.textContent("#live-card"),/固定配信/);
   assert.equal(await page.isDisabled("#copy-url"),true);
   assert.equal(await page.isDisabled("#download-original"),true);
+  // The old fixed URL must be recognizable as the current published release.
+  await page.click("#show-cards .show-card");
+  await page.waitForFunction(()=>document.querySelector("#current-title")?.textContent==="くるみ割り人形");
+  assert.equal(await page.textContent("#loaded-version"),"R0002");
+  assert.equal(await page.textContent("#fixed-version"),"R0002");
+  assert.match(await page.textContent("#version-relation"),/同じ版/);
   // File is processed locally. No outbound HTTP calls, no GitHub authentication.
   const sample=mockPack();
   await page.setInputFiles("#file-input",[{name:"rehearsal.json",mimeType:"application/json",buffer:Buffer.from(sample,"utf8")}]);
   await page.waitForFunction(()=>document.querySelector("#current-title").textContent==="テスト用");
   assert.equal(await page.isDisabled("#copy-url"),true);
   assert.equal(await page.isDisabled("#download-original"),false);
+  assert.equal(await page.textContent("#loaded-version"),"R0001");
+  assert.match(await page.textContent("#fixed-version"),/R0002.*別公演/);
+  assert.match(await page.textContent("#version-relation"),/別公演/);
   await page.click("#tab-edit");
+  assert.equal(await page.inputValue("#release-number"),"2");
+  assert.match(await page.textContent("#release-hint"),/R0002/);
   assert.equal(await page.inputValue("#show-jp"),"公演サンプル");
   await page.fill("#show-jp","本番用公演");
   await page.fill("#release-number","2");
@@ -76,13 +87,14 @@ try{
   const edited=readPack(await readFile(file));
   assert.equal(edited.showJp,"本番用公演");
   assert.equal(edited.pack.releaseRevision,2);
+  assert.equal(await page.textContent("#loaded-version"),"R0002");
   assert.equal(edited.pack.cueCount,1);
   assert.equal(edited.cues[0].uid,"cue-1");
   await page.click("#tab-manage");
   assert.equal(await page.isDisabled("#publish-fixed"),false);
   assert.match(await page.textContent("#publish-preview"),/Show ID: smoke-001/);
   assert.deepEqual(errors,[]);
-  console.log("Browser smoke PASS: empty catalog, local upload, safe edit and JSON download");
+  console.log("Browser smoke PASS: fixed-release comparison, uploaded JSON version, safe edit and download");
 }finally{
   if(browser)await browser.close();
   await new Promise(resolve=>server.close(resolve));
