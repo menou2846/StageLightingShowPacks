@@ -44,6 +44,14 @@ button.block{width:100%}
 .source{color:var(--muted);font-size:12px;overflow-wrap:anywhere;margin:4px 0 14px}
 .quick-info{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:13px}
 .quick-info span{border:1px solid var(--line);padding:4px 9px;border-radius:7px;font-size:12px;background:var(--sub)}
+.tabs{display:flex;gap:9px;margin:12px 0 18px}
+.tabs button[aria-selected=true]{background:var(--accent);border-color:var(--accent);color:#102431;font-weight:750}
+.tabs button{flex:1}
+.preview-entry{padding:10px 0;border-top:1px solid #314459}
+.preview-entry:first-child{border-top:0}
+.preview-entry strong{display:block;font-size:15px;overflow-wrap:anywhere}
+.preview-entry small{display:block;overflow-wrap:anywhere}
+.preview-entry .uid{font-size:12px;color:var(--accent)}
 .group{background:var(--sub);border:1px solid var(--line);border-radius:11px;padding:14px;margin-top:17px}
 .list{max-height:450px;overflow:auto;padding-right:4px}
 .edit-row{border-top:1px solid #314459;padding:10px 0}
@@ -68,8 +76,8 @@ footer{font-size:12px;color:var(--muted);padding-bottom:40px}
 <body>
 <header>
 <div class="eyebrow">STAGE LIGHTING CONSOLE</div>
-<h1>SHOW 名称エディター</h1>
-<p class="muted">JSONを開いて公演名・Act名・Cue名を編集し、PCに別名保存するツールです。</p>
+<h1>SHOW データ確認・名称編集</h1>
+<p class="muted">まずプレビューで公演内容を確認。必要なときだけ公演名・Act名・Cue名を編集してPCに保存できます。</p>
 </header>
 <main>
 <aside class="panel">
@@ -100,6 +108,26 @@ footer{font-size:12px;color:var(--muted);padding-bottom:40px}
 <h2 id="editor-title">公演を選択してください</h2>
 <p id="source-info" class="source">左側からJSONを選ぶと編集できます。</p>
 <div id="info" class="quick-info"></div>
+<div class="tabs" role="tablist" aria-label="SHOWの確認と編集">
+<button id="tab-preview" type="button" role="tab" aria-selected="true">プレビュー</button>
+<button id="tab-edit" type="button" role="tab" aria-selected="false" disabled>名称を編集</button>
+</div>
+<div id="preview-panel" role="tabpanel">
+<div class="group">
+<h3>公演名</h3>
+<div id="preview-show" class="list"><p class="tiny">JSONを選ぶとここに表示されます。</p></div>
+</div>
+<div class="group">
+<h3>Act一覧</h3>
+<div id="preview-acts" class="list"><p class="tiny">JSONを開いてください。</p></div>
+</div>
+<div class="group">
+<h3>Cue一覧</h3>
+<div id="preview-cues" class="list"><p class="tiny">JSONを開いてください。</p></div>
+</div>
+<div class="actions"><button type="button" id="start-edit" class="primary" disabled>このSHOWの名前を編集する</button></div>
+</div>
+<div id="edit-panel" role="tabpanel" class="hidden">
 <fieldset id="editor-fields" disabled>
 <div class="group">
 <h3>公演名</h3>
@@ -129,7 +157,8 @@ footer{font-size:12px;color:var(--muted);padding-bottom:40px}
 </div>
 </fieldset>
 <div class="note">編集したデータは、管理者（神無月瑪瑙）に渡してください。</div>
-<p class="tiny">このページでは名前だけを編集できます。照明・タイミング・Cueの内部データは変更せず、GitHubへの自動送信も行いません。</p>
+</div>
+<p class="tiny">変更できるのは名前だけです。照明・タイミング・Cueの内部データは変更せず、GitHubへの自動送信も行いません。</p>
 </section>
 </main>
 <footer>Stage Lighting Console · SHOW 名称エディター</footer>
