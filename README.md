@@ -4,15 +4,14 @@ VRChat Stage Lighting Console用の**公開公演ライブラリ**です。
 
 **[公演データの保管庫](https://menou2846.github.io/StageLightingShowPacks/)**
 
-## Web管理者保存（追加機能）
+## Webページの役割（名称エディター中心）
 
-- 「固定配信中」カードと公演一覧で、現在の `show-pack.json`、Cue・Release、過去版を区別して表示
-- 「GitHubへ保存（管理者）」でSHOWを明示確認後に固定URLへ反映。Unity側のURLは変更不要
-- 更新前の固定版と新しい版を `shows/<slug>/releases/rNNNN.json` に保存し、`catalog.json` と固定 `show-pack.json` を**同じnon-force Git Commit**で更新。既存Releaseファイルは上書き禁止。別Show IDへの切替は追加確認
-- GitHub所有者の短期限fine-grained PAT（StageLightingShowPacksだけ、Contents: Read and write）を**その操作でのみ入力**。トークンをWebコード・localStorage・Gitコミットへ保存しない。公開ページへの資格情報入力にはリスクがあるため、ドメインが正規サイトか必ず確認
-- JSONの破損検査、版番号、同番号のデータ衝突を確認して拒否。保存前のPCダウンロードと明示的な「公開」確認を必須
-- WebページにURLを常時大きく表示せず折りたたむが、**GitHub Pagesに置くJSON自体は一般公開**。秘密の台本や個人情報は置かない
-- ページのコードを更新しただけでは、現在配信中の `show-pack.json` の中身やUnity側の設定は変えない
+- SHOW / Act / Cueの日英名称をブラウザで編集し、新しいReleaseとして**PCへJSONを別名ダウンロード**する。元JSONは変更しない
+- 現在の固定URL `show-pack.json` で**配信されている**SHOWと、`catalog.json` のリハーサル／本番候補／本番版の登録区分を表示
+- 分類ラベルは管理上の用途であって、VRChatインスタンスのLIVE・リハーサルにどのSHOWが**適用済み**かを証明しない。適用状況は実VRChat側で確認する
+- 旧固定URLのみ公開されカタログが空なら、配信済みSHOWは表示し、リハーサル／本番版の分類は「未登録」とする
+- **ブラウザからGitHubへ書き込む機能・トークン入力欄は廃止**。管理者のWindows SHOW管理アプリと既存の `gh auth login` を使って更新する
+- 配信URLは従来通り固定。GitHub Pagesに載せた内容はURLを非表示にしても一般公開
 
 ## 現在の仕様
 
@@ -22,7 +21,7 @@ VRChat Stage Lighting Console用の**公開公演ライブラリ**です。
 - 編集後はRelease Revisionを上げて**新しいJSONをローカルへダウンロード**。元の公開版、手元の元ファイル、GitHubの履歴は変更しない
 - Schema 1は名称が格納されないため読込のみ。名前編集はSchema 2～5
 - 過去Releaseは**固定URL**を持ち、後からほかのReleaseを追加しても置き換えない
-- 通常の閲覧者には編集権限を与えない。GitHubへ書き込む場合のみ管理者の明示認証と確認が必要
+- Webではブラウザ内の名称編集とPC保存のみ。GitHubへの公開は管理者PCのアプリから明示操作する
 
 **現在のPublicカタログは空ですが、旧固定URLのSHOW JSONは存在します。** 最初の管理者更新時に現在の配信版を履歴へ移します。
 
@@ -100,7 +99,7 @@ shows/
 5. GitHub Pagesへの反映後、公開サイトで版を選択して検証・URLコピー
 6. VRChatの SHOW → REMOTE にその固定URLを入力して、**検証・比較・明示的に確定**
 
-Web管理画面からの明示的なGitHub保存機能を追加しました。PC版Show Managerの旧固定URL更新機能を使う場合は、Web側の版別履歴と整合するよう確認が必要です。
+ブラウザGitHub保存は廃止し、PCアプリだけを更新経路に統一します。PC版の新版Publisherは、固定URL更新時に版別履歴とカタログを同時更新する機能の統合・検証が必要です。
 
 ## プレビュー版の検証
 

@@ -1,10 +1,9 @@
 import {readPack,exportEditedPack,MAX_JSON_BYTES} from "./show-pack-codec.mjs";
 import {readCatalog,releaseURL} from "./show-library-catalog.mjs";
-import {publishFixedShow} from "./show-library-publisher.mjs";
 const el=id=>document.getElementById(id);
 const home=new URL("./",document.baseURI);
 let catalog=null,selectedShow=null,selectedRelease=null,source=null;
-let currentFixed=null,publishing=false;
+let currentFixed=null,hasPublishedHistory=false;
 let sourceURL=null,sourceJSON=null,dirty=false,sourceLabel="";
 const e={status:el("status"),show:el("show-select"),rev:el("revision-select")};
 const setStatus=(text,error=false)=>{e.status.textContent=text;e.status.className="status"+(error?" error":" ok");};
@@ -70,7 +69,7 @@ function confirmChange(){
   return window.confirm("未保存の名称編集があります。編集内容を破棄して切り替えますか？");
 }
 window.addEventListener("beforeunload",ev=>{if(dirty){ev.preventDefault();ev.returnValue="";}});
-function markDirty(){if(!source||source.pack.dataSchema<2)return;dirty=true;reset("selected-description","名称が未保存の状態です。公開データは変更されていません。");updatePublishPreview();}
+function markDirty(){if(!source||source.pack.dataSchema<2)return;dirty=true;reset("selected-description","名称が未保存の状態です。公開データは変更されていません。");updateEditorContext();}
 function contentBlob(text,file){
   const object=URL.createObjectURL(new Blob([text],{type:"application/json;charset=utf-8"}));
   const a=document.createElement("a");
@@ -105,7 +104,7 @@ function updateSelection(){
   el("load-public").disabled=!selectedRelease;
   el("publication-status").textContent=selectedRelease?
     (selectedShow.archived?"アーカイブ済・":"")+"選択版 R"+String(selectedRelease.revision)+"："+
-    selectedRelease.stage+" ／ "+selectedRelease.cueCount+" Cues":"公開版なし";
+    (hasPublishedHistory?stageLabel(selectedRelease.stage)+"として登録":"区分未登録") + " ／ "+selectedRelease.cueCount+" Cues（VRChatでの適用は未確認）":"公開版なし";
 }
 function legacyURL(){return new URL("show-pack.json",home).href;}
 function renderFixed(){
@@ -117,7 +116,46 @@ function renderFixed(){
   const details=document.createElement("small");
   details.textContent="Release "+currentFixed.pack.releaseRevision+" ・ Cue "+currentFixed.pack.cueCount+
     " ・ Change "+currentFixed.pack.changeCount+" ・ Schema "+currentFixed.pack.dataSchema;
-  box.append(tag,title,details);
+  const stage=catalog?.shows.find(item=>item.showId===currentFixed.pack.showId)?.releases.find(r=>r.revision===currentFixed.pack.releaseRevision)?.stage;
+  const category=document.createElement("small");
+  category.textContent="管理上の保存区分："+(hasPublishedHistory && stage?stageLabel(stage):"未登録（固定配信は確認済み）");
+  box.append(tag,title,details,category);
+}
+function stageLabel(stage){return ({rehearsal:"リハーサル版",candidate:"本番候補",final:"本番版"})[stage]||"区分不明";}
+function renderStageStatus(){
+  const box=el("stage-status");box.replaceChildren();
+  for(const [stage,name] of [["rehearsal","リハーサル"],["candidate","本番候補"],["final","本番版"]]){
+    const node=document.createElement("div");node.className="stage-state";
+    const heading=document.createElement("strong");heading.textContent=name+"として登録";
+    const detail=document.createElement("span");
+    const versions=hasPublishedHistory?(catalog?.shows||[]).flatMap(show=>
+      show.releases.filter(r=>r.stage===stage).map(r=>({show,release:r}))):[];
+    versions.sort((a,b)=>b.release.revision-a.release.revision);
+    if(!versions.length)detail.textContent="登録なし"+(!hasPublishedHistory?"（旧固定URL版は分類されていません）":"");
+    else{
+      const top=versions[0];
+      const onFixed=currentFixed?.pack.showId===top.show.showId&&currentFixed.pack.releaseRevision===top.release.revision;
+      detail.textContent=top.show.title+" ・ R"+String(top.release.revision).padStart(4,"0")+
+        " ／ "+versions.length+"版登録"+(onFixed?" ／ 固定URL配信中":" ／ 固定URLとは別");
+    }
+    node.append(heading,detail);box.append(node);
+  }
+}
+function updateEditorContext(){
+  const box=el("editor-context");
+  if(!source){box.textContent="公演一覧から選ぶか、左のJSONファイルを読み込むと編集できます。";return;}
+  const p=source.pack;
+  const fixed=currentFixed?.pack;
+  let compare="固定URLの配信：未取得";
+  if(fixed){
+    if(fixed.showId!==p.showId)compare="現在の固定URLは別公演（"+fixed.displayName+" / R"+fixed.releaseRevision+"）";
+    else compare="固定URL配信："+releaseText(fixed.releaseRevision)+
+      (fixed.releaseRevision===p.releaseRevision?"（同じ版番号）":"（読み込んだ版と異なる）");
+  }
+  box.textContent="編集中："+(p.displayName||source.showJp||"無題")+
+    " ／ 元JSON "+releaseText(p.releaseRevision)+" ／ "+p.cueCount+" Cue"+
+    " ／ "+compare+"。"+(dirty?" 名称に未保存の変更があります。":"")+
+    " この画面で編集してもGitHubは変更されません。";
 }
 function renderShowCards(){
   const list=el("show-cards");list.replaceChildren();
@@ -153,6 +191,7 @@ async function fetchFixed(){
   }catch{currentFixed=null;}
   renderFixed();
   renderVersionComparison();
+  updateEditorContext();
 }
 function discoverLegacy() {
   if(!currentFixed)return null;
@@ -182,9 +221,11 @@ function attachFixedIfMissing(){
 async function refreshCatalog(){
   try {
     await fetchFixed();
+    let originalCatalogHasShows=false;
     const response=await fetch(new URL("catalog.json",home),{cache:"no-store"});
     if(response.ok){
       const data=readCatalog(await response.text());
+      originalCatalogHasShows=data.shows.length>0;
       if(data.shows.length){catalog=data;}
       else{
         const fallback=discoverLegacy();
@@ -193,6 +234,7 @@ async function refreshCatalog(){
     }else if(response.status===404)catalog=discoverLegacy()?.catalog||
       {format:"stage-lighting-show-catalog",version:1,shows:[]};
     else throw new Error("catalog.json HTTP "+response.status);
+    hasPublishedHistory=originalCatalogHasShows;
     attachFixedIfMissing();
     const shows=[...catalog.shows].sort((a,b)=>a.title.localeCompare(b.title,"ja"));
     if(!shows.length){clearOptions(e.show,"まだ公開データはありません");clearOptions(e.rev,"バージョンなし");updateSelection();renderShowCards();setStatus("公開済み公演はまだありません。手元のJSONを読み込んで編集できます。");return;}
@@ -202,12 +244,17 @@ async function refreshCatalog(){
     if(shows.some(s=>s.slug===previous))e.show.value=previous;
     updateReleaseSelect();
     renderShowCards();
+    renderFixed();
+    renderStageStatus();
+    updateEditorContext();
     renderVersionComparison();
     updateReleaseHint();
     setStatus("固定配信と保存履歴を読み込みました。公演を選択できます。");
   }catch(error){
     catalog=null;clearOptions(e.show,"カタログを取得できません");clearOptions(e.rev,"バージョンなし");
+    hasPublishedHistory=false;
     renderShowCards();
+    renderStageStatus();
     renderVersionComparison();
     updateReleaseHint();
     setStatus("公開ライブラリを取得できませんでした："+error.message,true);
@@ -226,8 +273,8 @@ function openData(raw,{url=null,label="ローカルJSON"}={}){
   el("copy-url").disabled=!url;
   initializeEditor();
   renderVersionComparison();
-  updatePublishPreview();
-  selectTab("view");
+  updateEditorContext();
+  selectTab(result.pack.dataSchema>=2?"edit":"view");
   setStatus("JSON読込完了："+releaseText(result.pack.releaseRevision)+" / "+result.pack.cueCount+
     " Cue。固定配信との差を「読み込んだSHOWと現在の配信版」に表示しました。");
 }
@@ -257,11 +304,10 @@ async function fileOpen(file){
   el("file-input").value="";
 }
 function selectTab(which){
-  for(const name of ["view","edit","manage"]){
+  for(const name of ["view","edit"]){
     el(name).classList.toggle("hidden",name!==which);
     el("tab-"+name).setAttribute("aria-selected",String(name===which));
   }
-  if(which==="manage")updatePublishPreview();
 }
 function formInput(parent,label,value,setID){
   const wrapper=document.createElement("div"),caption=document.createElement("label"),input=document.createElement("input");
@@ -333,77 +379,6 @@ async function copyURL(){
   try{await navigator.clipboard.writeText(sourceURL);setStatus("VRChat REMOTE用の固定Release URLをコピーしました。");}
   catch{setStatus("URLをコピーできません。表示されたURLを手動でコピーしてください。",true);}
 }
-function preparedJSON(){
-  if(!source)throw new Error("公演データを先に読み込んでください");
-  if(!dirty)return sourceJSON;
-  const revision=Number(el("release-number").value);
-  const lookup=k=>document.querySelector('[data-field="'+k+'"]').value;
-  const acts=source.acts.map((act,i)=>({...act,jp:lookup("act-"+i+"-jp"),en:lookup("act-"+i+"-en")}));
-  const cues=source.cues.map((cue,i)=>({...cue,jp:lookup("cue-"+i+"-jp"),en:lookup("cue-"+i+"-en")}));
-  return exportEditedPack(source,{displayName:el("display-name").value,showJp:el("show-jp").value,
-    showEn:el("show-en").value,acts,cues,revision});
-}
-function updatePublishPreview(){
-  const button=el("publish-fixed");button.disabled=!source||publishing;
-  const preview=el("publish-preview");
-  if(!source){preview.textContent="まずSHOW JSONを開いてください。";return;}
-  const target=dirty?Number(el("release-number").value):source.pack.releaseRevision;
-  const fixed=currentFixed?.pack;
-  const {latest}=releaseHistoryFor(source.pack.showId);
-  const sameId=fixed?.showId===source.pack.showId;
-  const blocked=sameId && target<=fixed.releaseRevision && !dirty;
-  button.disabled=publishing||!source||!currentFixed||blocked;
-  let line="書き込み対象："+(source.pack.displayName||"無題")+" / Show ID: "+source.pack.showId+
-    " / "+releaseText(target)+(dirty?"（名称編集後の新Release）":"（読み込んだJSONのまま）")+
-    " / Cue "+source.pack.cueCount+" / Change "+source.pack.changeCount+
-    "。現在の固定配信："+(fixed?fixed.displayName+" / "+releaseText(fixed.releaseRevision):"未取得")+
-    "。同一公演の保存済み最新版："+releaseText(latest)+"。";
-  if(blocked)line+=" 同じ公演の同じ版・古い版は直接上書きできません。名称編集で新しい番号を作るか、新しいJSONを読み込んでください。";
-  if(dirty)line+=" 編集内容は公開直前に検証します。";
-  if(fixed && !sameId)line+=" 別公演への固定URL切替です。";
-  preview.textContent=line;
-}
-async function publishCurrentFixed(){
-  if(publishing)return;
-  if(!currentFixed){
-    el("publish-status").textContent="現在の固定配信を確認できません。誤上書きを防ぐため保存を中止します。配信が確認できてから再実行してください。";
-    return;
-  }
-  let raw,doc;
-  try{raw=preparedJSON();doc=readPack(raw);}
-  catch(error){el("publish-status").textContent="保存対象の検証に失敗："+error.message;return;}
-  const tokenInput=el("admin-token");
-  const token=tokenInput.value.trim();
-  if(!token){el("publish-status").textContent="管理者のfine-grained tokenが必要です。";return;}
-  const previous=currentFixed?.pack;
-  const changedShow=previous && previous.showId!==doc.pack.showId;
-  const details="対象："+doc.pack.displayName+"\nShow ID："+doc.pack.showId+
-    "\nCue："+doc.pack.cueCount+" / Change："+doc.pack.changeCount+
-    "\nRelease："+doc.pack.releaseRevision+
-    "\n現在の配信："+(previous?previous.displayName+" / R"+previous.releaseRevision:"未取得")+
-    "\n\n固定URLの内容が一般公開されます。古い版はバックアップとして保存します。";
-  if(changedShow&&!window.confirm("別の公演に固定URLを切り替えます。\n\n"+details)){tokenInput.value="";return;}
-  if(!window.confirm("GitHubへ保存しますか？\n\n"+details)){tokenInput.value="";return;}
-  if(window.prompt("誤操作防止：公開する場合は「公開」と入力してください。")!=="公開"){tokenInput.value="";return;}
-  publishing=true;updatePublishPreview();
-  el("publish-status").textContent="GitHubへ保存しています。ほかの操作は行わないでください。";
-  try{
-    // Download the exact validated input before publication, independently of GitHub.
-    contentBlob(raw,fileName(doc,true,doc.pack.releaseRevision));
-    const result=await publishFixedShow(raw,token,{
-      stage:el("publish-stage").value,label:el("publish-label").value||"固定URL公開版"
-    });
-    el("publish-status").textContent="GitHub保存成功：Release "+result.revision+
-      " / Cue "+result.cues+"。過去版を保持しました。Pages反映後に一覧を再読込し、VRChatで取得検証してください。";
-    setStatus("GitHubへの保存が完了しました。Web配信への反映とVRChat読込は別途確認してください。");
-    dirty=false;
-  }catch(error){
-    el("publish-status").textContent="保存できませんでした："+error.message+
-      "。固定URLを変更したかどうか、GitHubの履歴を確認してください。";
-  }finally{
-    tokenInput.value="";publishing=false;updatePublishPreview();
-  }
-}
 e.show.addEventListener("change",()=>{if(dirty&&!confirmChange()){e.show.value=selectedShow?.slug??"";return;}updateReleaseSelect();});
 e.rev.addEventListener("change",updateSelection);
 el("load-public").addEventListener("click",()=>loadPublic());
@@ -411,9 +386,6 @@ el("refresh-catalog").addEventListener("click",refreshCatalog);
 el("file-input").addEventListener("change",ev=>fileOpen(ev.target.files?.[0]));
 el("tab-view").addEventListener("click",()=>selectTab("view"));
 el("tab-edit").addEventListener("click",()=>selectTab("edit"));
-el("tab-manage").addEventListener("click",()=>selectTab("manage"));
-el("publish-fixed").addEventListener("click",publishCurrentFixed);
-el("refresh-after-publish").addEventListener("click",refreshCatalog);
 el("download-original").addEventListener("click",downloadOriginal);
 el("copy-url").addEventListener("click",copyURL);
 el("download-edit").addEventListener("click",exportNames);
