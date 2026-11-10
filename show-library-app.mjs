@@ -10,6 +10,61 @@ const e={status:el("status"),show:el("show-select"),rev:el("revision-select")};
 const setStatus=(text,error=false)=>{e.status.textContent=text;e.status.className="status"+(error?" error":" ok");};
 const reset=(id,value)=>{el(id).textContent=value;};
 const int=v=>Number.isSafeInteger(v)?String(v):"—";
+const releaseText=v=>Number.isSafeInteger(v)?"R"+String(v).padStart(4,"0"):"—";
+// Release is a user-visible publication revision, not the binary Schema version.
+function releaseHistoryFor(showId){
+  const same=catalog?.shows.find(item=>item.showId===showId);
+  const revisions=same?.releases.map(item=>item.revision)??[];
+  if(currentFixed?.pack.showId===showId)revisions.push(currentFixed.pack.releaseRevision);
+  return {latest:revisions.length?Math.max(...revisions):null,history:same};
+}
+function recommendedRelease(showId,loaded){
+  const {latest}=releaseHistoryFor(showId);
+  const greatest=Math.max(loaded,latest??loaded);
+  return greatest<2147483647?greatest+1:null;
+}
+function renderVersionComparison(){
+  if(!source){
+    reset("loaded-version","—");
+    reset("fixed-version",currentFixed?releaseText(currentFixed.pack.releaseRevision):"—");
+    reset("latest-version","—");
+    reset("version-relation","JSONを読み込むと、保存済みデータとの違いをここに表示します。");
+    return;
+  }
+  const p=source.pack, fixed=currentFixed?.pack;
+  const {latest}=releaseHistoryFor(p.showId);
+  reset("loaded-version",releaseText(p.releaseRevision));
+  reset("fixed-version",fixed?releaseText(fixed.releaseRevision)+(fixed.showId!==p.showId?"（別公演）":""):"未取得");
+  reset("latest-version",releaseText(latest));
+  const hint=el("version-relation");
+  hint.className="version-note";
+  let message="";
+  if(!fixed)message="固定URLの配信状況を確認できません。JSONは読み込めますが、GitHub更新前には配信状況を確認してください。";
+  else if(fixed.showId!==p.showId)message="これは現在配信中のSHOWとは別公演です。GitHubへ反映すると固定URLの公演が切り替わります。";
+  else if(p.releaseRevision<fixed.releaseRevision)
+    message="読み込んだJSONは現在の固定配信より古い版です。古い版を復元する場合も、公開用には新しいRelease番号が必要です。";
+  else if(p.releaseRevision===fixed.releaseRevision){
+    const sameHash=p.bodyHashFNV1a32===fixed.bodyHashFNV1a32&&p.bodyLength===fixed.bodyLength&&p.cueCount===fixed.cueCount;
+    message=sameHash?"現在配信中のSHOWと同じ版・同じデータ内容です。別名編集する場合は次のRelease番号を使用してください。":
+      "注意：現在の固定配信とRelease番号が同じなのに内容が異なります。この番号では上書きできません。";
+  }else message="読み込んだJSONは現在の固定配信より新しい番号です。内容を確認してから公開してください。";
+  if(latest!==null && p.releaseRevision<latest)message+=" 保存履歴の最新版は"+releaseText(latest)+"です。";
+  else if(latest!==null && p.releaseRevision===latest && fixed?.showId!==p.showId)
+    message+=" 保存履歴に同じRelease番号があります。既存版を上書きすることはできません。";
+  if(!fixed||fixed.showId!==p.showId||p.releaseRevision<fixed.releaseRevision||
+     (p.releaseRevision===fixed.releaseRevision && p.bodyHashFNV1a32!==fixed.bodyHashFNV1a32)||
+     (latest!==null && p.releaseRevision<latest))hint.classList.add("warn");
+  else hint.classList.add("good");
+  hint.textContent=message+" ※読み込みだけではGitHubやVRChatは変更されません。";
+}
+function updateReleaseHint(){
+  const hint=el("release-hint");
+  if(!source){hint.textContent="読み込んだJSONを選ぶと、次に使う版番号の候補を表示します。";return;}
+  const recommended=recommendedRelease(source.pack.showId,source.pack.releaseRevision);
+  hint.textContent=recommended===null?"Release番号が上限に達しているため、新しい編集版は作成できません。":
+    "元JSONは"+releaseText(source.pack.releaseRevision)+"。保存履歴も考慮した次の候補は"+releaseText(recommended)+
+    "。この欄は名称編集版の作成時にだけ適用され、読み込んだ元JSONは変更しません。";
+}
 function confirmChange(){
   if(!dirty)return true;
   return window.confirm("未保存の名称編集があります。編集内容を破棄して切り替えますか？");
@@ -97,6 +152,7 @@ async function fetchFixed(){
     currentFixed=readPack(await response.text());
   }catch{currentFixed=null;}
   renderFixed();
+  renderVersionComparison();
 }
 function discoverLegacy() {
   if(!currentFixed)return null;
@@ -146,10 +202,14 @@ async function refreshCatalog(){
     if(shows.some(s=>s.slug===previous))e.show.value=previous;
     updateReleaseSelect();
     renderShowCards();
+    renderVersionComparison();
+    updateReleaseHint();
     setStatus("固定配信と保存履歴を読み込みました。公演を選択できます。");
   }catch(error){
     catalog=null;clearOptions(e.show,"カタログを取得できません");clearOptions(e.rev,"バージョンなし");
     renderShowCards();
+    renderVersionComparison();
+    updateReleaseHint();
     setStatus("公開ライブラリを取得できませんでした："+error.message,true);
   }
 }
@@ -165,9 +225,11 @@ function openData(raw,{url=null,label="ローカルJSON"}={}){
   el("download-original").disabled=false;
   el("copy-url").disabled=!url;
   initializeEditor();
+  renderVersionComparison();
   updatePublishPreview();
   selectTab("view");
-  setStatus("JSON読込完了： "+result.pack.cueCount+" Cue、Release "+result.pack.releaseRevision+"。");
+  setStatus("JSON読込完了："+releaseText(result.pack.releaseRevision)+" / "+result.pack.cueCount+
+    " Cue。固定配信との差を「読み込んだSHOWと現在の配信版」に表示しました。");
 }
 async function loadPublic(alreadyConfirmed=false){
   if(!selectedRelease||!selectedShow)return;
@@ -213,8 +275,9 @@ function initializeEditor(){
   el("edit-fields").disabled=!doc||doc.pack.dataSchema<2;
   for(const [name,value] of Object.entries({
     "display-name":doc?.displayName??"","show-jp":doc?.showJp??"","show-en":doc?.showEn??"",
-    "release-number":doc?String(doc.pack.releaseRevision+1):""
+    "release-number":doc?String(recommendedRelease(doc.pack.showId,doc.pack.releaseRevision)??""):""
   }))el(name).value=value;
+  updateReleaseHint();
   const acts=el("act-list"),cues=el("cue-list");acts.replaceChildren();cues.replaceChildren();
   if(!doc||doc.pack.dataSchema<2){
     acts.textContent="Schema 1は名称を保存できないため編集対象外です。";
@@ -284,10 +347,21 @@ function updatePublishPreview(){
   const button=el("publish-fixed");button.disabled=!source||publishing;
   const preview=el("publish-preview");
   if(!source){preview.textContent="まずSHOW JSONを開いてください。";return;}
-  preview.textContent="書き込み対象："+(source.pack.displayName||"無題")+" / Show ID: "+source.pack.showId+
-    " / Release "+(dirty?el("release-number").value+"（名称編集版）":source.pack.releaseRevision)+
+  const target=dirty?Number(el("release-number").value):source.pack.releaseRevision;
+  const fixed=currentFixed?.pack;
+  const {latest}=releaseHistoryFor(source.pack.showId);
+  const sameId=fixed?.showId===source.pack.showId;
+  const blocked=sameId && target<=fixed.releaseRevision && !dirty;
+  button.disabled=publishing||!source||!currentFixed||blocked;
+  let line="書き込み対象："+(source.pack.displayName||"無題")+" / Show ID: "+source.pack.showId+
+    " / "+releaseText(target)+(dirty?"（名称編集後の新Release）":"（読み込んだJSONのまま）")+
     " / Cue "+source.pack.cueCount+" / Change "+source.pack.changeCount+
-    "。固定URLの現在版："+(currentFixed?currentFixed.pack.displayName+" / R"+currentFixed.pack.releaseRevision:"未取得");
+    "。現在の固定配信："+(fixed?fixed.displayName+" / "+releaseText(fixed.releaseRevision):"未取得")+
+    "。同一公演の保存済み最新版："+releaseText(latest)+"。";
+  if(blocked)line+=" 同じ公演の同じ版・古い版は直接上書きできません。名称編集で新しい番号を作るか、新しいJSONを読み込んでください。";
+  if(dirty)line+=" 編集内容は公開直前に検証します。";
+  if(fixed && !sameId)line+=" 別公演への固定URL切替です。";
+  preview.textContent=line;
 }
 async function publishCurrentFixed(){
   if(publishing)return;
