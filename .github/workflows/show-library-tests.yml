@@ -6,6 +6,7 @@ on:
       - "show-pack-codec.mjs"
       - "show-library-catalog.mjs"
       - "show-library-app.mjs"
+      - "show-library-publisher.mjs"
       - "index.html"
       - "catalog.json"
       - "tests/**"
@@ -24,7 +25,7 @@ jobs:
         with:
           node-version: "22"
       - name: Check JavaScript syntax
-        run: node --check show-pack-codec.mjs && node --check show-library-catalog.mjs && node --check show-library-app.mjs
+        run: node --check show-pack-codec.mjs && node --check show-library-catalog.mjs && node --check show-library-app.mjs && node --check show-library-publisher.mjs
       - name: Run lossless Snapshot and catalog tests
         run: node --test tests/*.test.mjs
       - name: Install Chromium for browser smoke test
