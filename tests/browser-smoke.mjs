@@ -61,6 +61,8 @@ try{
   await page.goto("http://127.0.0.1:"+port+"/");
   await page.waitForFunction(()=>document.querySelector("#status")?.textContent.includes("JSONを選んで"));
   assert.equal(await page.locator("#editor-fields").isDisabled(),true);
+  assert.equal(await page.getAttribute("#tab-preview","aria-selected"),"true");
+  assert.equal(await page.isDisabled("#tab-edit"),true);
   assert.equal(await page.locator("#tab-manage").count(),0);
   assert.equal(await page.locator("#admin-token").count(),0);
   assert.equal(await page.locator("#stage-status").count(),0);
@@ -72,6 +74,10 @@ try{
   await page.waitForFunction(()=>document.querySelector("#editor-title")?.textContent==="くるみ割り人形");
   assert.equal(await page.inputValue("#release-number"),"3");
   assert.equal(await page.locator("#editor-fields").isDisabled(),false);
+  assert.equal(await page.getAttribute("#tab-preview","aria-selected"),"true");
+  assert.equal(await page.locator("#edit-panel").isHidden(),true);
+  assert.match(await page.textContent("#preview-cues"),/Cue 001/);
+  assert.equal(await page.isDisabled("#tab-edit"),false);
   const sample=mockPack();
   await page.setInputFiles("#file-input",[{
     name:"rehearsal.json",mimeType:"application/json",buffer:Buffer.from(sample,"utf8")
@@ -79,9 +85,19 @@ try{
   await page.waitForFunction(()=>document.querySelector("#editor-title")?.textContent==="テスト用");
   assert.equal(await page.inputValue("#show-jp"),"公演サンプル");
   assert.equal(await page.inputValue("#release-number"),"2");
+  assert.equal(await page.getAttribute("#tab-preview","aria-selected"),"true");
+  assert.equal(await page.locator("#edit-panel").isHidden(),true);
+  assert.match(await page.textContent("#preview-show"),/公演サンプル/);
+  await page.click("#start-edit");
+  assert.equal(await page.getAttribute("#tab-edit","aria-selected"),"true");
+  assert.equal(await page.locator("#edit-panel").isVisible(),true);
   assert.match(await page.textContent("#fixed-name"),/くるみ割り人形/);
   assert.match(await page.textContent(".note"),/編集したデータは、管理者（神無月瑪瑙）に渡してください。/);
   await page.fill("#show-jp","本番用公演");
+  await page.click("#tab-preview");
+  assert.match(await page.textContent("#preview-show"),/本番用公演/);
+  assert.match(await page.textContent("#preview-notice"),/未保存/);
+  await page.click("#tab-edit");
   page.on("dialog",dialog=>dialog.accept());
   const downloadPromise=page.waitForEvent("download");
   await page.click("#download-edit");
@@ -92,9 +108,12 @@ try{
   assert.equal(edited.pack.cueCount,1);
   assert.equal(edited.cues[0].uid,"cue-1");
   assert.equal(await page.inputValue("#show-jp"),"本番用公演");
+  assert.equal(await page.getAttribute("#tab-preview","aria-selected"),"true");
+  assert.equal(await page.locator("#edit-panel").isHidden(),true);
+  assert.match(await page.textContent("#preview-show"),/本番用公演/);
   assert.match(await page.textContent("#status"),/管理者（神無月瑪瑙）/);
   assert.deepEqual(errors,[]);
-  console.log("Browser smoke PASS: simple editor, fixed SHOW name/date, local JSON editing/download");
+  console.log("Browser smoke PASS: preview-first editor, safe switching, file download and published name/date");
 }finally{
   if(browser)await browser.close();
   await new Promise(resolve=>server.close(resolve));
