@@ -75,6 +75,36 @@ test("lossless name editing, exact prefix and tail bytes",()=>{
     assert.equal(before.pack.releaseRevision,5);
   }
 });
+test("Act grouping edits only metadata, preserving Cue order and production data",()=>{
+  for(const schema of [2,3,4,5]){
+    const before=readPack(packJSON(schema));
+    const acts=[...before.acts.map(a=>({...a})),{uid:"act_new_2",jp:"第二幕",en:"Act Two"}];
+    const cues=before.cues.map(c=>({...c}));
+    cues[1].actUid="act_new_2";
+    const after=readPack(exportEditedPack(before,{
+      displayName:before.displayName,showJp:before.showJp,showEn:before.showEn,
+      acts,cues,revision:6
+    }));
+    assert.deepEqual(after.acts.map(a=>a.uid),["act_1","act_new_2"]);
+    assert.deepEqual(after.cues.map(c=>[c.uid,c.actUid]),[["q1","act_1"],["q2","act_new_2"]]);
+    assert.deepEqual(array(after.body.subarray(0,after.prefixEnd)),array(before.body.subarray(0,before.prefixEnd)));
+    assert.deepEqual(array(after.body.subarray(after.suffixStart)),array(before.body.subarray(before.suffixStart)));
+    assert.equal(after.pack.cueCount,2);
+    assert.equal(after.pack.changeCount,1);
+  }
+});
+test("Act deletion requires relocating Cues and rejects corrupt assignments",()=>{
+  const base=readPack(packJSON(5));
+  const fields={displayName:base.displayName,showJp:base.showJp,showEn:base.showEn,revision:6};
+  assert.throws(()=>exportEditedPack(base,{...fields,acts:[],cues:base.cues}),/所属Act/);
+  assert.throws(()=>exportEditedPack(base,{...fields,acts:[...base.acts,base.acts[0]],cues:base.cues}),/重複/);
+  const moved=base.cues.map(c=>({...c,actUid:""}));
+  const cleared=readPack(exportEditedPack(base,{...fields,acts:[],cues:moved}));
+  assert.equal(cleared.acts.length,0);
+  assert.deepEqual(cleared.cues.map(c=>c.actUid),["",""]);
+  assert.deepEqual(cleared.cues.map(c=>c.uid),["q1","q2"]);
+  assert.throws(()=>exportEditedPack(base,{...fields,acts:base.acts,cues:[base.cues[1],base.cues[0]]}),/再生順/);
+});
 test("no name change preserves binary payload exactly",()=>{
   const before=readPack(packJSON(5));
   const after=readPack(exportEditedPack(before,{
