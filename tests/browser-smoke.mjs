@@ -90,9 +90,13 @@ try{
   assert.equal(await page.textContent("#loaded-version"),"R0002");
   assert.equal(edited.pack.cueCount,1);
   assert.equal(edited.cues[0].uid,"cue-1");
-  await page.click("#tab-manage");
-  assert.equal(await page.isDisabled("#publish-fixed"),false);
-  assert.match(await page.textContent("#publish-preview"),/Show ID: smoke-001/);
+  assert.equal(await page.locator("#tab-manage").count(),0);
+  assert.equal(await page.locator("#admin-token").count(),0);
+  assert.equal(await page.getAttribute("#tab-edit","aria-selected"),"true");
+  assert.match(await page.textContent("#editor-context"),/R0002/);
+  assert.match(await page.textContent("#stage-status"),/リハーサル/);
+  assert.match(await page.textContent("#stage-status"),/登録なし/);
+  assert.match(await page.textContent("#live-card"),/区分/);
   assert.deepEqual(errors,[]);
   console.log("Browser smoke PASS: fixed-release comparison, uploaded JSON version, safe edit and download");
 }finally{
