@@ -73,6 +73,16 @@ footer{padding-bottom:55px;color:var(--muted);font-size:12px}
 .live-card small{display:block;margin-top:4px}
 details{border-radius:9px}summary{cursor:pointer;padding:7px 0;color:var(--blue)}
 .auth-note{font-size:12px;color:#d1be9a}
+.version-comparison{border:1px solid var(--edge);border-radius:10px;padding:14px;margin:14px 0}
+.version-comparison h3{margin:0 0 10px;font-size:16px}
+.version-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.version-cell{border:1px solid var(--edge);background:#162434;border-radius:8px;padding:9px}
+.version-cell .name{display:block;font-size:12px;color:var(--muted)}
+.version-cell strong{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.version-note{color:#d3e0ed;font-size:13px;margin-top:10px}
+.version-note.warn{color:#f3c799}
+.version-note.good{color:#b0e6cf}
+@media(max-width:640px){.version-grid{grid-template-columns:1fr}}
 #admin-token{background:var(--panel2);border:1px solid var(--edge);border-radius:8px;color:var(--text);padding:10px 11px;width:100%;max-width:100%}
 @media(max-width:860px){main{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}.panel{padding:17px}}
 </style>
@@ -93,7 +103,7 @@ details{border-radius:9px}summary{cursor:pointer;padding:7px 0;color:var(--blue)
 <div id="show-cards" class="show-cards"><p class="muted tiny">一覧を取得しています…</p></div>
 <h3>公演・Releaseを選択</h3>
 <label for="show-select">作品</label><select id="show-select" disabled><option>公開公演はまだありません</option></select>
-<label for="revision-select">バージョン</label><select id="revision-select" disabled><option>バージョンを選択</option></select>
+<label for="revision-select">保存済みの版（Release番号）</label><select id="revision-select" disabled><option>バージョンを選択</option></select>
 <p id="publication-status" class="data-source">公開情報を確認中…</p>
 <div class="actions">
 <button id="load-public" disabled>選択版を読み込む</button>
@@ -102,8 +112,9 @@ details{border-radius:9px}summary{cursor:pointer;padding:7px 0;color:var(--blue)
 <div class="divider"></div>
 <h3>手元のJSONを開く</h3>
 <p class="tiny muted">Windows受取ツールで保存したJSONを読み込めます。アップロードしてもサーバーには送信されず、ブラウザ内で処理します。</p>
-<label for="file-input">Remote Pack JSON</label>
+<label for="file-input">PCで受信したSHOW JSONファイル</label>
 <input id="file-input" type="file" accept=".json,application/json">
+<p class="tiny muted">選んだJSONはまず画面に読み込むだけ。GitHubには保存されません。読み込み後、ファイルの版と現在の配信版を比較できます。</p>
 </section>
 <section class="panel">
 <h3>データの扱い</h3>
@@ -122,6 +133,16 @@ details{border-radius:9px}summary{cursor:pointer;padding:7px 0;color:var(--blue)
 <div id="view">
 <h2 id="current-title">公演データが未選択です</h2>
 <p id="current-source" class="data-source">公開一覧から選択するか、JSONを開いてください。</p>
+<div id="version-comparison" class="version-comparison" aria-live="polite">
+<h3>読み込んだSHOWと現在の配信版</h3>
+<div class="version-grid">
+<div class="version-cell"><span class="name">読み込んだJSONの版</span><strong id="loaded-version">—</strong></div>
+<div class="version-cell"><span class="name">固定URLで配信中の版</span><strong id="fixed-version">—</strong></div>
+<div class="version-cell"><span class="name">この公演の保存済み最新版</span><strong id="latest-version">—</strong></div>
+</div>
+<p id="version-relation" class="version-note">JSONを読み込むと、保存済みデータとの違いをここに表示します。</p>
+<p class="tiny muted">Release＝公演データの版番号。Schema＝ファイル形式の番号（Releaseとは別）。読込だけでは保存・公開されません。</p>
+</div>
 <div class="summary">
 <div class="stat"><strong id="cue-count">—</strong><span>Cues</span></div>
 <div class="stat"><strong id="release-count">—</strong><span>Release</span></div>
@@ -144,7 +165,8 @@ details{border-radius:9px}summary{cursor:pointer;padding:7px 0;color:var(--blue)
 <fieldset id="edit-fields" disabled>
 <div class="grid2">
 <div><label for="display-name">公開用表示名</label><input id="display-name" type="text" maxlength="64"></div>
-<div><label for="release-number">新しいRelease番号</label><input id="release-number" type="number" min="1" max="2147483647"></div>
+<div><label for="release-number">名称編集後に作る新しいRelease番号</label><input id="release-number" type="number" min="1" max="2147483647">
+<p id="release-hint" class="tiny muted">読み込んだJSONを選ぶと、次に使う版番号の候補を表示します。</p></div>
 <div><label for="show-jp">公演名（日本語）</label><input id="show-jp" type="text" maxlength="256"></div>
 <div><label for="show-en">公演名（English）</label><input id="show-en" type="text" maxlength="256"></div>
 </div>
@@ -158,6 +180,7 @@ details{border-radius:9px}summary{cursor:pointer;padding:7px 0;color:var(--blue)
 <h2>管理者：GitHubの固定URLへ保存</h2>
 <p class="muted">「データ確認」または「名称エディター」で選んだSHOW JSONを固定URLに反映します。Webへアクセスできる人全員が配信データを取得できるため、公開してよいSHOWだけを選択してください。</p>
 <div id="publish-preview" class="note">まずSHOW JSONを開いてください。</div>
+<p class="tiny muted">ここで使うのは読み込み済みJSONです。名称を編集した場合は新Release版を作成し、編集していなければ元JSONのRelease番号のまま保存します。</p>
 <div class="grid2">
 <div><label for="publish-label">保存履歴に表示する名前</label><input id="publish-label" type="text" maxlength="128" value="固定URL公開版"></div>
 <div><label for="publish-stage">保存履歴の分類</label><select id="publish-stage"><option value="final">本番版</option><option value="candidate">本番候補</option><option value="rehearsal">リハーサル（※公開されます）</option></select></div>
