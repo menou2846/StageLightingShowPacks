@@ -15,7 +15,46 @@ function setStatus(message,error=false){
 function changed(){
   if(!source)return;
   dirty=true;
+  renderPreview();
   setStatus("名称を編集中です。編集後は「編集したJSONを保存」を押してください。");
+}
+function switchPage(which){
+  const edit=which==="edit"&&Boolean(source)&&source.pack.dataSchema>=2;
+  el("preview-panel").classList.toggle("hidden",edit);
+  el("edit-panel").classList.toggle("hidden",!edit);
+  el("tab-preview").setAttribute("aria-selected",String(!edit));
+  el("tab-edit").setAttribute("aria-selected",String(edit));
+  if(!edit)renderPreview();
+}
+function appendPreviewEntry(root,heading,jp,en){
+  const row=document.createElement("div");row.className="preview-entry";
+  const subtitle=document.createElement("div");subtitle.className="uid";subtitle.textContent=heading;
+  const main=document.createElement("strong");main.textContent=jp||"（未設定）";
+  const english=document.createElement("small");english.textContent=en||"";
+  row.append(subtitle,main,english);
+  root.append(row);
+}
+function renderPreview(){
+  if(!source)return;
+  const fromEdit=dirty;
+  const displayName=fromEdit?el("display-name").value:source.pack.displayName;
+  const showJp=fromEdit?el("show-jp").value:source.showJp;
+  const showEn=fromEdit?el("show-en").value:source.showEn;
+  const show=el("preview-show");show.replaceChildren();
+  appendPreviewEntry(show,displayName||"公演名",showJp,showEn);
+  const acts=el("preview-acts");acts.replaceChildren();
+  const cues=el("preview-cues");cues.replaceChildren();
+  source.acts.forEach((act,i)=>appendPreviewEntry(acts,"Act "+(i+1),
+    fromEdit?field("act-"+i+"-jp"):act.jp,
+    fromEdit?field("act-"+i+"-en"):act.en));
+  source.cues.forEach((cue,i)=>appendPreviewEntry(cues,"Cue "+String(i+1).padStart(3,"0"),
+    fromEdit?field("cue-"+i+"-jp"):cue.jp,
+    fromEdit?field("cue-"+i+"-en"):cue.en));
+  if(!source.acts.length)acts.textContent="Actはありません。";
+  if(!source.cues.length)cues.textContent="Cueはありません。";
+  el("preview-notice").textContent=fromEdit?
+    "未保存の編集内容をプレビューしています。PCへ保存するには「名称を編集」画面に戻って保存してください。":
+    "JSONの名称を確認しています。照明やCueの動作は再生しません。";
 }
 function confirmSwitch(){
   return !dirty||window.confirm("未保存の名称編集があります。変更を破棄して別のJSONを開きますか？");
@@ -77,6 +116,10 @@ function formSource(doc,label){
   el("show-en").value=doc.showEn||"";
   renderRows("act-list",doc.acts,"act");
   renderRows("cue-list",doc.cues,"cue");
+  el("tab-edit").disabled=doc.pack.dataSchema<2;
+  el("start-edit").disabled=doc.pack.dataSchema<2;
+  renderPreview();
+  switchPage("preview");
   const next=latestRelease(doc.pack.showId,doc.pack.releaseRevision)+1;
   el("release-number").value=next<=2147483647?String(next):"";
   el("release-hint").textContent="元："+releaseText(doc.pack.releaseRevision)+
@@ -236,6 +279,9 @@ async function openLocal(file){
   }catch(error){setStatus("JSONを開けません："+error.message,true);}
   el("file-input").value="";
 }
+el("tab-preview").addEventListener("click",()=>switchPage("preview"));
+el("tab-edit").addEventListener("click",()=>switchPage("edit"));
+el("start-edit").addEventListener("click",()=>switchPage("edit"));
 el("file-input").addEventListener("change",event=>openLocal(event.target.files?.[0]));
 el("show-select").addEventListener("change",selectRelease);
 el("revision-select").addEventListener("change",updateSelected);
