@@ -4,19 +4,21 @@ VRChat Stage Lighting Console用の**公開公演ライブラリ**です。
 
 **[公演データの保管庫](https://menou2846.github.io/StageLightingShowPacks/)**
 
-## Webページの役割（名称エディター中心）
+## Webページの役割（シンプルな名称エディター）
 
-- SHOW / Act / Cueの日英名称をブラウザで編集し、新しいReleaseとして**PCへJSONを別名ダウンロード**する。元JSONは変更しない
-- 現在の固定URL `show-pack.json` で**配信されている**SHOWと、`catalog.json` のリハーサル／本番候補／本番版の登録区分を表示
-- 分類ラベルは管理上の用途であって、VRChatインスタンスのLIVE・リハーサルにどのSHOWが**適用済み**かを証明しない。適用状況は実VRChat側で確認する
-- 旧固定URLのみ公開されカタログが空なら、配信済みSHOWは表示し、リハーサル／本番版の分類は「未登録」とする
-- **ブラウザからGitHubへ書き込む機能・トークン入力欄は廃止**。管理者のWindows SHOW管理アプリと既存の `gh auth login` を使って更新する
-- 配信URLは従来通り固定。GitHub Pagesに載せた内容はURLを非表示にしても一般公開
+- PCからJSONを開く、または公開済みの公演・バージョンを選択して開く
+- **読み込み後はプレビュー画面が最初に開く**。公演名・Act名・Cue名を読み取り専用で確認して、「このSHOWの名前を編集する」を押すと名称編集画面へ移る。保存後は再びプレビューへ戻る
+- **公演名・Act名・Cue名（日英）を編集してPCへ別名JSONとしてダウンロード**
+- **「編集したデータは、管理者（神無月瑪瑙）に渡してください。」** を画面に表示
+- 配信状況は**固定URLのSHOW公演名＋GitHubでそのJSONを最後に更新した日時（日本時間）**のみに絞る。日時がGitHub APIから取得できない場合は推測せず「最終更新日を確認できません」
+- リハーサル／本番候補／本番版といった分類ラベルはWeb画面に表示しない。GitHub・VRChatへの適用状況を誤解させない
+- WebにGitHubへのアップロード機能・トークン入力欄は設けない。固定URLへの更新は**Windows管理アプリだけ**が担当する
+- 公開済みデータのURLを隠してもGitHub PagesのSHOW JSON自体は一般公開
 
 ## 現在の仕様
 
-- **公演を選択** → **保存済みReleaseを選択** → 実ファイルのShow ID、Release、Cue件数、Schema、FNVチェックサムを検証 → **JSONダウンロード / VRChat REMOTE用URLコピー**
-- **手元のRemote PackをJSONアップロード**して内容確認。ブラウザ内だけで読み込み、未公開ファイルをサーバーへ送信しない
+- **公演を選択** → **保存済みReleaseを選択** → JSONを検証して名称エディターへ読み込み（直接URLコピーはWebのメイン操作から除外）
+- **手元のRemote Pack JSONを開いて名称編集**。ブラウザ内だけで読み込み、未公開ファイルをサーバーへ送信しない
 - **Webの名称エディター**は、Show名 / Act名 / Cue名（日英）と表示名だけを変更できる。照明パラメータ、Cue UID、Role、Fixture、Timing、LOOK、FOLLOW、Act割当とSchema 3～5のtailはバイト単位で保護
 - 編集後はRelease Revisionを上げて**新しいJSONをローカルへダウンロード**。元の公開版、手元の元ファイル、GitHubの履歴は変更しない
 - Schema 1は名称が格納されないため読込のみ。名前編集はSchema 2～5

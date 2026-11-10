@@ -1,394 +1,293 @@
 import {readPack,exportEditedPack,MAX_JSON_BYTES} from "./show-pack-codec.mjs";
 import {readCatalog,releaseURL} from "./show-library-catalog.mjs";
+
 const el=id=>document.getElementById(id);
 const home=new URL("./",document.baseURI);
-let catalog=null,selectedShow=null,selectedRelease=null,source=null;
-let currentFixed=null,hasPublishedHistory=false;
-let sourceURL=null,sourceJSON=null,dirty=false,sourceLabel="";
-const e={status:el("status"),show:el("show-select"),rev:el("revision-select")};
-const setStatus=(text,error=false)=>{e.status.textContent=text;e.status.className="status"+(error?" error":" ok");};
-const reset=(id,value)=>{el(id).textContent=value;};
-const int=v=>Number.isSafeInteger(v)?String(v):"—";
-const releaseText=v=>Number.isSafeInteger(v)?"R"+String(v).padStart(4,"0"):"—";
-// Release is a user-visible publication revision, not the binary Schema version.
-function releaseHistoryFor(showId){
-  const same=catalog?.shows.find(item=>item.showId===showId);
-  const revisions=same?.releases.map(item=>item.revision)??[];
-  if(currentFixed?.pack.showId===showId)revisions.push(currentFixed.pack.releaseRevision);
-  return {latest:revisions.length?Math.max(...revisions):null,history:same};
+const GITHUB_COMMITS="https://api.github.com/repos/menou2846/StageLightingShowPacks/commits?path=show-pack.json&per_page=1";
+let source=null,sourceJSON=null,sourceName="",dirty=false;
+let catalog=null,selectedShow=null,selectedRelease=null,currentFixed=null;
+const releaseText=n=>"R"+String(n).padStart(4,"0");
+
+function setStatus(message,error=false){
+  el("status").textContent=message;
+  el("status").className="status "+(error?"error":"ok");
 }
-function recommendedRelease(showId,loaded){
-  const {latest}=releaseHistoryFor(showId);
-  const greatest=Math.max(loaded,latest??loaded);
-  return greatest<2147483647?greatest+1:null;
+function changed(){
+  if(!source)return;
+  dirty=true;
+  renderPreview();
+  setStatus("名称を編集中です。編集後は「編集したJSONを保存」を押してください。");
 }
-function renderVersionComparison(){
-  if(!source){
-    reset("loaded-version","—");
-    reset("fixed-version",currentFixed?releaseText(currentFixed.pack.releaseRevision):"—");
-    reset("latest-version","—");
-    reset("version-relation","JSONを読み込むと、保存済みデータとの違いをここに表示します。");
+function switchPage(which){
+  const edit=which==="edit"&&Boolean(source)&&source.pack.dataSchema>=2;
+  el("preview-panel").classList.toggle("hidden",edit);
+  el("edit-panel").classList.toggle("hidden",!edit);
+  el("tab-preview").setAttribute("aria-selected",String(!edit));
+  el("tab-edit").setAttribute("aria-selected",String(edit));
+  if(!edit)renderPreview();
+}
+function appendPreviewEntry(root,heading,jp,en){
+  const row=document.createElement("div");row.className="preview-entry";
+  const subtitle=document.createElement("div");subtitle.className="uid";subtitle.textContent=heading;
+  const main=document.createElement("strong");main.textContent=jp||"（未設定）";
+  const english=document.createElement("small");english.textContent=en||"";
+  row.append(subtitle,main,english);
+  root.append(row);
+}
+function renderPreview(){
+  if(!source)return;
+  const fromEdit=dirty;
+  const displayName=fromEdit?el("display-name").value:source.pack.displayName;
+  const showJp=fromEdit?el("show-jp").value:source.showJp;
+  const showEn=fromEdit?el("show-en").value:source.showEn;
+  const show=el("preview-show");show.replaceChildren();
+  appendPreviewEntry(show,displayName||"公演名",showJp,showEn);
+  const acts=el("preview-acts");acts.replaceChildren();
+  const cues=el("preview-cues");cues.replaceChildren();
+  source.acts.forEach((act,i)=>appendPreviewEntry(acts,"Act "+(i+1),
+    fromEdit?field("act-"+i+"-jp"):act.jp,
+    fromEdit?field("act-"+i+"-en"):act.en));
+  source.cues.forEach((cue,i)=>appendPreviewEntry(cues,"Cue "+String(i+1).padStart(3,"0"),
+    fromEdit?field("cue-"+i+"-jp"):cue.jp,
+    fromEdit?field("cue-"+i+"-en"):cue.en));
+  if(!source.acts.length)acts.textContent="Actはありません。";
+  if(!source.cues.length)cues.textContent="Cueはありません。";
+  el("preview-notice").textContent=fromEdit?
+    "未保存の編集内容をプレビューしています。PCへ保存するには「名称を編集」画面に戻って保存してください。":
+    "JSONの名称を確認しています。照明やCueの動作は再生しません。";
+}
+function confirmSwitch(){
+  return !dirty||window.confirm("未保存の名称編集があります。変更を破棄して別のJSONを開きますか？");
+}
+window.addEventListener("beforeunload",event=>{
+  if(dirty){event.preventDefault();event.returnValue="";}
+});
+function filename(doc){
+  const id=String(doc.pack.showId).replace(/[^a-zA-Z0-9_-]/g,"_").slice(0,48)||"show";
+  return "stage-lighting-"+id+"-r"+String(doc.pack.releaseRevision).padStart(4,"0")+"-edited.json";
+}
+function downloadText(raw,name){
+  const url=URL.createObjectURL(new Blob([raw],{type:"application/json;charset=utf-8"}));
+  const link=document.createElement("a");
+  link.href=url;link.download=name;document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60_000);
+}
+function textField(parent,label,value,key){
+  const holder=document.createElement("div"),caption=document.createElement("label");
+  caption.textContent=label;
+  const input=document.createElement("input");
+  input.type="text";input.maxLength=256;input.value=value??"";input.dataset.field=key;
+  input.addEventListener("input",changed);
+  holder.append(caption,input);parent.append(holder);
+}
+function renderRows(target,items,prefix){
+  const root=el(target);root.replaceChildren();
+  if(!items.length){
+    const message=document.createElement("p");
+    message.className="tiny";message.textContent="項目はありません。";root.append(message);
     return;
   }
-  const p=source.pack, fixed=currentFixed?.pack;
-  const {latest}=releaseHistoryFor(p.showId);
-  reset("loaded-version",releaseText(p.releaseRevision));
-  reset("fixed-version",fixed?releaseText(fixed.releaseRevision)+(fixed.showId!==p.showId?"（別公演）":""):"未取得");
-  reset("latest-version",releaseText(latest));
-  const hint=el("version-relation");
-  hint.className="version-note";
-  let message="";
-  if(!fixed)message="固定URLの配信状況を確認できません。JSONは読み込めますが、GitHub更新前には配信状況を確認してください。";
-  else if(fixed.showId!==p.showId)message="これは現在配信中のSHOWとは別公演です。GitHubへ反映すると固定URLの公演が切り替わります。";
-  else if(p.releaseRevision<fixed.releaseRevision)
-    message="読み込んだJSONは現在の固定配信より古い版です。古い版を復元する場合も、公開用には新しいRelease番号が必要です。";
-  else if(p.releaseRevision===fixed.releaseRevision){
-    const sameHash=p.bodyHashFNV1a32===fixed.bodyHashFNV1a32&&p.bodyLength===fixed.bodyLength&&p.cueCount===fixed.cueCount;
-    message=sameHash?"現在配信中のSHOWと同じ版・同じデータ内容です。別名編集する場合は次のRelease番号を使用してください。":
-      "注意：現在の固定配信とRelease番号が同じなのに内容が異なります。この番号では上書きできません。";
-  }else message="読み込んだJSONは現在の固定配信より新しい番号です。内容を確認してから公開してください。";
-  if(latest!==null && p.releaseRevision<latest)message+=" 保存履歴の最新版は"+releaseText(latest)+"です。";
-  else if(latest!==null && p.releaseRevision===latest && fixed?.showId!==p.showId)
-    message+=" 保存履歴に同じRelease番号があります。既存版を上書きすることはできません。";
-  if(!fixed||fixed.showId!==p.showId||p.releaseRevision<fixed.releaseRevision||
-     (p.releaseRevision===fixed.releaseRevision && p.bodyHashFNV1a32!==fixed.bodyHashFNV1a32)||
-     (latest!==null && p.releaseRevision<latest))hint.classList.add("warn");
-  else hint.classList.add("good");
-  hint.textContent=message+" ※読み込みだけではGitHubやVRChatは変更されません。";
+  for(const [i,item] of items.entries()){
+    const row=document.createElement("div");row.className="edit-row";
+    const heading=document.createElement("div");heading.className="uid";
+    heading.textContent=prefix==="act"?"Act "+(i+1):"Cue "+String(i+1).padStart(3,"0");
+    const fields=document.createElement("div");fields.className="grid";
+    textField(fields,"日本語",item.jp,prefix+"-"+i+"-jp");
+    textField(fields,"English",item.en,prefix+"-"+i+"-en");
+    row.append(heading,fields);root.append(row);
+  }
 }
-function updateReleaseHint(){
-  const hint=el("release-hint");
-  if(!source){hint.textContent="読み込んだJSONを選ぶと、次に使う版番号の候補を表示します。";return;}
-  const recommended=recommendedRelease(source.pack.showId,source.pack.releaseRevision);
-  hint.textContent=recommended===null?"Release番号が上限に達しているため、新しい編集版は作成できません。":
-    "元JSONは"+releaseText(source.pack.releaseRevision)+"。保存履歴も考慮した次の候補は"+releaseText(recommended)+
-    "。この欄は名称編集版の作成時にだけ適用され、読み込んだ元JSONは変更しません。";
+function latestRelease(showId,from){
+  const releases=catalog?.shows.find(s=>s.showId===showId)?.releases??[];
+  const fixed=currentFixed?.pack.showId===showId?currentFixed.pack.releaseRevision:0;
+  return Math.max(from,fixed,...releases.map(r=>r.revision));
 }
-function confirmChange(){
-  if(!dirty)return true;
-  return window.confirm("未保存の名称編集があります。編集内容を破棄して切り替えますか？");
+function formSource(doc,label){
+  source=doc;sourceName=label;dirty=false;
+  el("editor-fields").disabled=doc.pack.dataSchema<2;
+  el("editor-title").textContent=doc.pack.displayName||doc.showJp||"名前のない公演";
+  el("source-info").textContent=label;
+  const info=el("info");info.replaceChildren();
+  for(const value of [releaseText(doc.pack.releaseRevision),doc.pack.cueCount+" Cue",doc.acts.length+" Act"]){
+    const chip=document.createElement("span");chip.textContent=value;info.append(chip);
+  }
+  el("display-name").value=doc.pack.displayName||"";
+  el("show-jp").value=doc.showJp||"";
+  el("show-en").value=doc.showEn||"";
+  renderRows("act-list",doc.acts,"act");
+  renderRows("cue-list",doc.cues,"cue");
+  el("tab-edit").disabled=doc.pack.dataSchema<2;
+  el("start-edit").disabled=doc.pack.dataSchema<2;
+  renderPreview();
+  switchPage("preview");
+  const next=latestRelease(doc.pack.showId,doc.pack.releaseRevision)+1;
+  el("release-number").value=next<=2147483647?String(next):"";
+  el("release-hint").textContent="元："+releaseText(doc.pack.releaseRevision)+
+    (next<=2147483647?" → 保存時："+releaseText(next):"（Release番号の上限です）");
+  if(doc.pack.dataSchema<2)setStatus("このJSONは古いSchema 1です。名称編集にはSchema 2以上が必要です。",true);
+  else setStatus("JSONを開きました。公演・Act・Cueの名前を編集できます。");
 }
-window.addEventListener("beforeunload",ev=>{if(dirty){ev.preventDefault();ev.returnValue="";}});
-function markDirty(){if(!source||source.pack.dataSchema<2)return;dirty=true;reset("selected-description","名称が未保存の状態です。公開データは変更されていません。");updateEditorContext();}
-function contentBlob(text,file){
-  const object=URL.createObjectURL(new Blob([text],{type:"application/json;charset=utf-8"}));
-  const a=document.createElement("a");
-  a.href=object;a.download=file;document.body.appendChild(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(object),60_000);
+function openData(raw,label){
+  const doc=readPack(raw);
+  sourceJSON=raw;
+  formSource(doc,label);
 }
-function safeFileID(s){return s.replace(/[^a-zA-Z0-9_-]+/g,"_").slice(0,48)||"show";}
-function fileName(doc,edited=false,revision=null){
-  return "stage-lighting-"+safeFileID(doc.pack.showId)+"-r"+String(revision??doc.pack.releaseRevision).padStart(4,"0")+(edited?"-edited":"")+".json";
+function field(key){return document.querySelector('[data-field="'+key+'"]')?.value??"";}
+function save(){
+  if(!source||source.pack.dataSchema<2)return;
+  try{
+    const revision=Number(el("release-number").value);
+    const acts=source.acts.map((act,i)=>({...act,jp:field("act-"+i+"-jp"),en:field("act-"+i+"-en")}));
+    const cues=source.cues.map((cue,i)=>({...cue,jp:field("cue-"+i+"-jp"),en:field("cue-"+i+"-en")}));
+    const displayName=el("display-name").value,showJp=el("show-jp").value,showEn=el("show-en").value;
+    const changedNames=displayName!==source.displayName||showJp!==source.showJp||showEn!==source.showEn||
+      acts.some((act,i)=>act.jp!==source.acts[i].jp||act.en!==source.acts[i].en)||
+      cues.some((cue,i)=>cue.jp!==source.cues[i].jp||cue.en!==source.cues[i].en);
+    if(!changedNames){setStatus("名前の変更がありません。編集してから保存してください。",true);return;}
+    const raw=exportEditedPack(source,{displayName,showJp,showEn,acts,cues,revision});
+    const updated=readPack(raw);
+    if(!window.confirm("変更したJSONをPCに保存しますか？\n元のJSONやGitHubの公開データは変更されません。"))return;
+    downloadText(raw,filename(updated));
+    sourceJSON=raw;
+    formSource(updated,"編集済みJSON（PCに別名保存）");
+    setStatus("JSONをPCに保存しました。編集したデータは、管理者（神無月瑪瑙）に渡してください。");
+  }catch(error){setStatus("JSONを保存できません："+error.message,true);}
 }
-function clearOptions(select,label){
-  select.replaceChildren(new Option(label,""));select.disabled=true;
+function resetEdits(){
+  if(!sourceJSON)return;
+  if(dirty&&!window.confirm("編集した名称を元に戻しますか？"))return;
+  try{formSource(readPack(sourceJSON),sourceName);}catch(error){setStatus(error.message,true);}
 }
-function updateReleaseSelect(){
-  const item=catalog?.shows.find(s=>s.slug===e.show.value);
-  selectedShow=item||null;selectedRelease=null;
-  clearOptions(e.rev,"バージョンを選択");
-  if(!item){el("publication-status").textContent="公開公演はまだありません";el("load-public").disabled=true;return;}
-  const releases=[...item.releases].sort((a,b)=>b.revision-a.revision);
-  if(!releases.length){el("publication-status").textContent="この公演は公開Releaseがありません";el("load-public").disabled=true;return;}
-  e.rev.replaceChildren(...releases.map(r=>new Option(
-    "R"+String(r.revision).padStart(4,"0")+" · "+r.label+
-    (currentFixed?.pack.showId===item.showId && r.revision===currentFixed.pack.releaseRevision?" · 固定配信中":r.revision===item.publishedRevision?" · 本番指定":""),
-    String(r.revision))));
-  e.rev.disabled=false;
-  const preferred=currentFixed?.pack.showId===item.showId?currentFixed.pack.releaseRevision:(item.publishedRevision??releases[0].revision);
-  e.rev.value=String(preferred);
-  updateSelection();renderShowCards();
+function selectRelease(){
+  const show=catalog?.shows.find(s=>s.slug===el("show-select").value);
+  selectedShow=show||null;selectedRelease=null;
+  const select=el("revision-select");select.replaceChildren();
+  if(!show||!show.releases.length){
+    select.add(new Option("データなし",""));select.disabled=true;
+    el("load-public").disabled=true;return;
+  }
+  const versions=[...show.releases].sort((a,b)=>b.revision-a.revision);
+  for(const release of versions){
+    select.add(new Option(releaseText(release.revision)+" ・ "+release.cueCount+" Cue",String(release.revision)));
+  }
+  select.disabled=false;
+  const preferred=show.publishedRevision??versions[0].revision;
+  select.value=String(preferred);
+  updateSelected();
 }
-function updateSelection(){
-  selectedRelease=selectedShow?.releases.find(r=>r.revision===Number(e.rev.value))??null;
+function updateSelected(){
+  selectedRelease=selectedShow?.releases.find(r=>r.revision===Number(el("revision-select").value))??null;
   el("load-public").disabled=!selectedRelease;
-  el("publication-status").textContent=selectedRelease?
-    (selectedShow.archived?"アーカイブ済・":"")+"選択版 R"+String(selectedRelease.revision)+"："+
-    (hasPublishedHistory?stageLabel(selectedRelease.stage)+"として登録":"区分未登録") + " ／ "+selectedRelease.cueCount+" Cues（VRChatでの適用は未確認）":"公開版なし";
 }
-function legacyURL(){return new URL("show-pack.json",home).href;}
-function renderFixed(){
-  const box=el("live-card");
-  box.replaceChildren();
-  if(!currentFixed){box.textContent="固定URLのSHOWを取得できませんでした。Web配信状態を確認してください。";return;}
-  const title=document.createElement("strong");title.textContent=currentFixed.pack.displayName||"無題の公演";
-  const tag=document.createElement("span");tag.className="active-tag";tag.textContent="現在の固定配信";
-  const details=document.createElement("small");
-  details.textContent="Release "+currentFixed.pack.releaseRevision+" ・ Cue "+currentFixed.pack.cueCount+
-    " ・ Change "+currentFixed.pack.changeCount+" ・ Schema "+currentFixed.pack.dataSchema;
-  const stage=catalog?.shows.find(item=>item.showId===currentFixed.pack.showId)?.releases.find(r=>r.revision===currentFixed.pack.releaseRevision)?.stage;
-  const category=document.createElement("small");
-  category.textContent="管理上の保存区分："+(hasPublishedHistory && stage?stageLabel(stage):"未登録（固定配信は確認済み）");
-  box.append(tag,title,details,category);
-}
-function stageLabel(stage){return ({rehearsal:"リハーサル版",candidate:"本番候補",final:"本番版"})[stage]||"区分不明";}
-function renderStageStatus(){
-  const box=el("stage-status");box.replaceChildren();
-  for(const [stage,name] of [["rehearsal","リハーサル"],["candidate","本番候補"],["final","本番版"]]){
-    const node=document.createElement("div");node.className="stage-state";
-    const heading=document.createElement("strong");heading.textContent=name+"として登録";
-    const detail=document.createElement("span");
-    const versions=hasPublishedHistory?(catalog?.shows||[]).flatMap(show=>
-      show.releases.filter(r=>r.stage===stage).map(r=>({show,release:r}))):[];
-    versions.sort((a,b)=>b.release.revision-a.release.revision);
-    if(!versions.length)detail.textContent="登録なし"+(!hasPublishedHistory?"（旧固定URL版は分類されていません）":"");
-    else{
-      const top=versions[0];
-      const onFixed=currentFixed?.pack.showId===top.show.showId&&currentFixed.pack.releaseRevision===top.release.revision;
-      detail.textContent=top.show.title+" ・ R"+String(top.release.revision).padStart(4,"0")+
-        " ／ "+versions.length+"版登録"+(onFixed?" ／ 固定URL配信中":" ／ 固定URLとは別");
-    }
-    node.append(heading,detail);box.append(node);
-  }
-}
-function updateEditorContext(){
-  const box=el("editor-context");
-  if(!source){box.textContent="公演一覧から選ぶか、左のJSONファイルを読み込むと編集できます。";return;}
-  const p=source.pack;
-  const fixed=currentFixed?.pack;
-  let compare="固定URLの配信：未取得";
-  if(fixed){
-    if(fixed.showId!==p.showId)compare="現在の固定URLは別公演（"+fixed.displayName+" / R"+fixed.releaseRevision+"）";
-    else compare="固定URL配信："+releaseText(fixed.releaseRevision)+
-      (fixed.releaseRevision===p.releaseRevision?"（同じ版番号）":"（読み込んだ版と異なる）");
-  }
-  box.textContent="編集中："+(p.displayName||source.showJp||"無題")+
-    " ／ 元JSON "+releaseText(p.releaseRevision)+" ／ "+p.cueCount+" Cue"+
-    " ／ "+compare+"。"+(dirty?" 名称に未保存の変更があります。":"")+
-    " この画面で編集してもGitHubは変更されません。";
-}
-function renderShowCards(){
-  const list=el("show-cards");list.replaceChildren();
-  const shows=[...(catalog?.shows||[])].sort((a,b)=>{
-    const liveA=a.showId===currentFixed?.pack.showId?1:0;
-    const liveB=b.showId===currentFixed?.pack.showId?1:0;
-    return liveB-liveA||a.title.localeCompare(b.title,"ja");
-  });
-  if(!shows.length){list.textContent="保存済みの公演はまだありません。";return;}
-  for(const item of shows){
-    const active=item.showId===currentFixed?.pack.showId;
-    const selected=item.slug===e.show.value;
-    const button=document.createElement("button");
-    button.type="button";button.className="show-card";button.setAttribute("aria-pressed",String(selected));
-    const title=document.createElement("strong");
-    title.textContent=item.title+(active?"  ● 固定配信中":"");
-    const summary=document.createElement("span");
-    summary.textContent=item.releases.length+" バージョン"+
-      (item.archived?" ・ アーカイブ":"")+" ・ Show ID: "+item.showId;
-    button.append(title,summary);
-    button.addEventListener("click",()=>{
-      if(selectedShow?.slug!==item.slug&&!confirmChange())return;
-      e.show.value=item.slug;updateReleaseSelect();loadPublic(true);
-    });
-    list.append(button);
-  }
-}
-async function fetchFixed(){
+function fixedURL(){return new URL("show-pack.json",home).href;}
+async function loadSelected(){
+  if(!selectedRelease||!selectedShow||!confirmSwitch())return;
+  const release=selectedRelease,show=selectedShow;
   try{
-    const response=await fetch(legacyURL(),{cache:"no-store"});
-    if(!response.ok)throw new Error("HTTP "+response.status);
-    currentFixed=readPack(await response.text());
-  }catch{currentFixed=null;}
-  renderFixed();
-  renderVersionComparison();
-  updateEditorContext();
-}
-function discoverLegacy() {
-  if(!currentFixed)return null;
-  const parsed=currentFixed;
-  return {catalog:{format:"stage-lighting-show-catalog",version:1,shows:[{
-    slug:"legacy",showId:parsed.pack.showId,title:parsed.pack.displayName,
-    archived:false,publishedRevision:parsed.pack.releaseRevision,releases:[{
-      revision:parsed.pack.releaseRevision,label:"従来の固定配信URL",stage:"final",
-      cueCount:parsed.pack.cueCount,dataSchema:parsed.pack.dataSchema,path:"show-pack.json"
-    }]
-  }]},legacy:true};
-}
-function attachFixedIfMissing(){
-  if(!currentFixed || !catalog)return;
-  const pack=currentFixed.pack;
-  let show=catalog.shows.find(s=>s.showId===pack.showId);
-  if(!show){
-    const slug=catalog.shows.some(s=>s.slug==="fixed-current")?"fixed-current-legacy":"fixed-current";
-    show={slug,showId:pack.showId,title:pack.displayName,archived:false,publishedRevision:pack.releaseRevision,releases:[]};
-    catalog.shows.push(show);
-  }
-  if(!show.releases.some(r=>r.revision===pack.releaseRevision)){
-    show.releases.push({revision:pack.releaseRevision,label:"現在の固定配信",stage:"final",
-      cueCount:pack.cueCount,dataSchema:pack.dataSchema,path:"show-pack.json"});
-  }
-}
-async function refreshCatalog(){
-  try {
-    await fetchFixed();
-    let originalCatalogHasShows=false;
-    const response=await fetch(new URL("catalog.json",home),{cache:"no-store"});
-    if(response.ok){
-      const data=readCatalog(await response.text());
-      originalCatalogHasShows=data.shows.length>0;
-      if(data.shows.length){catalog=data;}
-      else{
-        const fallback=discoverLegacy();
-        catalog=fallback?.catalog||data;
-      }
-    }else if(response.status===404)catalog=discoverLegacy()?.catalog||
-      {format:"stage-lighting-show-catalog",version:1,shows:[]};
-    else throw new Error("catalog.json HTTP "+response.status);
-    hasPublishedHistory=originalCatalogHasShows;
-    attachFixedIfMissing();
-    const shows=[...catalog.shows].sort((a,b)=>a.title.localeCompare(b.title,"ja"));
-    if(!shows.length){clearOptions(e.show,"まだ公開データはありません");clearOptions(e.rev,"バージョンなし");updateSelection();renderShowCards();setStatus("公開済み公演はまだありません。手元のJSONを読み込んで編集できます。");return;}
-    const previous=e.show.value;
-    e.show.replaceChildren(...shows.map(s=>new Option(s.title+(s.archived?"（アーカイブ）":""),s.slug)));
-    e.show.disabled=false;
-    if(shows.some(s=>s.slug===previous))e.show.value=previous;
-    updateReleaseSelect();
-    renderShowCards();
-    renderFixed();
-    renderStageStatus();
-    updateEditorContext();
-    renderVersionComparison();
-    updateReleaseHint();
-    setStatus("固定配信と保存履歴を読み込みました。公演を選択できます。");
-  }catch(error){
-    catalog=null;clearOptions(e.show,"カタログを取得できません");clearOptions(e.rev,"バージョンなし");
-    hasPublishedHistory=false;
-    renderShowCards();
-    renderStageStatus();
-    renderVersionComparison();
-    updateReleaseHint();
-    setStatus("公開ライブラリを取得できませんでした："+error.message,true);
-  }
-}
-function openData(raw,{url=null,label="ローカルJSON"}={}){
-  const result=readPack(raw);
-  source=result;sourceJSON=raw;sourceURL=url;sourceLabel=label;dirty=false;
-  reset("current-title",result.pack.displayName||result.showJp||"公演");
-  reset("current-source",label+" / Show ID: "+result.pack.showId);
-  reset("cue-count",int(result.pack.cueCount));reset("release-count",int(result.pack.releaseRevision));
-  reset("schema-count",int(result.pack.dataSchema));
-  reset("public-url",url||"ローカルJSONは公開されていません。VRChat用URLはありません。");
-  reset("selected-description","選択中のJSONは読込時にハッシュと構造を検証しました。実際のFixture互換性はVRChat取込時に最終検証してください。");
-  el("download-original").disabled=false;
-  el("copy-url").disabled=!url;
-  initializeEditor();
-  renderVersionComparison();
-  updateEditorContext();
-  selectTab(result.pack.dataSchema>=2?"edit":"view");
-  setStatus("JSON読込完了："+releaseText(result.pack.releaseRevision)+" / "+result.pack.cueCount+
-    " Cue。固定配信との差を「読み込んだSHOWと現在の配信版」に表示しました。");
-}
-async function loadPublic(alreadyConfirmed=false){
-  if(!selectedRelease||!selectedShow)return;
-  if(!alreadyConfirmed&&!confirmChange())return;
-  try{
-    const item=selectedRelease;
-    const url=item.path==="show-pack.json" ? legacyURL() : releaseURL(item,home);
+    const url=release.path==="show-pack.json"?fixedURL():releaseURL(release,home);
     const response=await fetch(url,{cache:"no-store"});
     if(!response.ok)throw new Error("HTTP "+response.status);
     const raw=await response.text(),doc=readPack(raw);
-    if(doc.pack.showId!==selectedShow.showId || doc.pack.releaseRevision!==item.revision ||
-      doc.pack.cueCount!==item.cueCount || doc.pack.dataSchema!==item.dataSchema)
-      throw new Error("カタログのShow ID/Release/Schema/Cue件数とJSONが一致しません");
-    openData(raw,{url,label:selectedShow.title+" / R"+item.revision+"（GitHub公開版）"});
-  }catch(error){setStatus("公開版を開けません："+error.message,true);}
+    if(doc.pack.showId!==show.showId||doc.pack.releaseRevision!==release.revision||
+       doc.pack.dataSchema!==release.dataSchema||doc.pack.cueCount!==release.cueCount)
+      throw new Error("選択した版とJSONが一致しません");
+    openData(raw,"公開済み："+show.title+" / "+releaseText(release.revision));
+  }catch(error){setStatus("公開済みJSONを開けません："+error.message,true);}
 }
-async function fileOpen(file){
-  if(!file)return;
-  if(!confirmChange()){el("file-input").value="";return;}
+async function fetchPublishedDate(){
   try{
-    if(file.size>MAX_JSON_BYTES)throw new Error("ファイルが容量上限を超えています");
-    const raw=await file.text();
-    openData(raw,{label:file.name+"（PCローカルのみ）"});
-  }catch(error){setStatus("ローカルJSONを開けません："+error.message,true);}
+    // The commit timestamp is when the fixed JSON file was changed on GitHub.
+    // The Pages deployment date is NOT reliable for this purpose.
+    const response=await fetch(GITHUB_COMMITS,{cache:"no-store",headers:{Accept:"application/vnd.github+json"}});
+    if(!response.ok)throw new Error("HTTP "+response.status);
+    const commits=await response.json();
+    const iso=commits?.[0]?.commit?.committer?.date;
+    if(typeof iso!=="string")throw new Error("missing date");
+    const stamp=new Date(iso);
+    if(!Number.isFinite(stamp.getTime()))throw new Error("invalid date");
+    const format=new Intl.DateTimeFormat("ja-JP",{
+      timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit",
+      hour:"2-digit",minute:"2-digit",hour12:false
+    });
+    el("fixed-updated").textContent="最終更新："+format.format(stamp)+"（日本時間）";
+  }catch{
+    el("fixed-updated").textContent="最終更新日を確認できません";
+  }
+}
+async function refresh(){
+  let fixedError=null;
+  try{
+    const response=await fetch(fixedURL(),{cache:"no-store"});
+    if(!response.ok)throw new Error("HTTP "+response.status);
+    currentFixed=readPack(await response.text());
+    el("fixed-name").textContent=currentFixed.pack.displayName||currentFixed.showJp||"名前のない公演";
+    // Do not silently invent a published date from the browser's clock.
+    await fetchPublishedDate();
+  }catch(error){
+    currentFixed=null;fixedError=error;
+    el("fixed-name").textContent="配信データを確認できません";
+    el("fixed-updated").textContent="更新日を確認できません";
+  }
+  let shows=[];
+  try{
+    const response=await fetch(new URL("catalog.json",home),{cache:"no-store"});
+    if(response.ok)shows=readCatalog(await response.text()).shows.map(show=>({
+      ...show,releases:[...show.releases]
+    }));
+    else if(response.status!==404)throw new Error("catalog HTTP "+response.status);
+  }catch(error){
+    setStatus("公開済みの公演一覧を読み込めません："+error.message,true);
+  }
+  if(currentFixed){
+    const pack=currentFixed.pack;
+    let match=shows.find(s=>s.showId===pack.showId);
+    if(!match){
+      match={showId:pack.showId,slug:"fixed-current",title:pack.displayName,
+        archived:false,publishedRevision:pack.releaseRevision,releases:[]};
+      shows.unshift(match);
+    }
+    if(!match.releases.some(r=>r.revision===pack.releaseRevision)){
+      match.releases.push({revision:pack.releaseRevision,label:"固定配信",
+        stage:"final",cueCount:pack.cueCount,dataSchema:pack.dataSchema,path:"show-pack.json"});
+    }
+  }
+  catalog={shows};
+  const choice=el("show-select"),previous=choice.value;
+  choice.replaceChildren();
+  if(shows.length){
+    for(const show of shows){
+      choice.add(new Option(show.title,show.slug));
+    }
+    choice.disabled=false;
+    if(shows.some(s=>s.slug===previous))choice.value=previous;
+    selectRelease();
+    if(!source)setStatus("JSONを選んで「選択して開く」を押してください。");
+  }else{
+    choice.add(new Option("公開済みの公演なし",""));choice.disabled=true;
+    el("revision-select").replaceChildren(new Option("データなし",""));
+    el("revision-select").disabled=true;
+    el("load-public").disabled=true;
+    if(!source)setStatus(fixedError?"公開データを取得できません。PCのJSONは読み込めます。":"PCに保存したJSONを開いて編集できます。",Boolean(fixedError));
+  }
+}
+async function openLocal(file){
+  if(!file)return;
+  if(!confirmSwitch()){el("file-input").value="";return;}
+  try{
+    if(file.size>MAX_JSON_BYTES)throw new Error("ファイルの容量が上限を超えています");
+    openData(await file.text(),file.name+"（PCのJSON）");
+  }catch(error){setStatus("JSONを開けません："+error.message,true);}
   el("file-input").value="";
 }
-function selectTab(which){
-  for(const name of ["view","edit"]){
-    el(name).classList.toggle("hidden",name!==which);
-    el("tab-"+name).setAttribute("aria-selected",String(name===which));
-  }
-}
-function formInput(parent,label,value,setID){
-  const wrapper=document.createElement("div"),caption=document.createElement("label"),input=document.createElement("input");
-  caption.textContent=label; input.type="text";input.maxLength=256;input.value=value??"";
-  input.dataset.field=setID;caption.appendChild(input);wrapper.appendChild(caption);parent.appendChild(wrapper);
-  input.addEventListener("input",markDirty);
-  return input;
-}
-function initializeEditor(){
-  const doc=source;
-  el("edit-fields").disabled=!doc||doc.pack.dataSchema<2;
-  for(const [name,value] of Object.entries({
-    "display-name":doc?.displayName??"","show-jp":doc?.showJp??"","show-en":doc?.showEn??"",
-    "release-number":doc?String(recommendedRelease(doc.pack.showId,doc.pack.releaseRevision)??""):""
-  }))el(name).value=value;
-  updateReleaseHint();
-  const acts=el("act-list"),cues=el("cue-list");acts.replaceChildren();cues.replaceChildren();
-  if(!doc||doc.pack.dataSchema<2){
-    acts.textContent="Schema 1は名称を保存できないため編集対象外です。";
-    cues.textContent="Schema 2以上の公演を読み込んでください。";return;
-  }
-  doc.acts.forEach((act,i)=>{
-    const row=document.createElement("div");row.className="editor-row";
-    const num=document.createElement("div");num.className="num";num.textContent="Act "+(i+1)+" / "+act.uid;
-    const fields=document.createElement("div");fields.className="grid2";
-    formInput(fields,"日本語",act.jp,"act-"+i+"-jp");
-    formInput(fields,"English",act.en,"act-"+i+"-en");
-    row.append(num,fields);acts.appendChild(row);
-  });
-  doc.cues.forEach((cue,i)=>{
-    const row=document.createElement("div");row.className="editor-row";
-    const num=document.createElement("div");num.className="num";
-    num.textContent="Q"+String(i+1).padStart(3,"0")+" / "+cue.uid+(cue.actUid?" / Act "+cue.actUid:"");
-    const fields=document.createElement("div");fields.className="grid2";
-    formInput(fields,"日本語",cue.jp,"cue-"+i+"-jp");
-    formInput(fields,"English",cue.en,"cue-"+i+"-en");
-    row.append(num,fields);cues.appendChild(row);
-  });
-}
-function exportNames(){
-  if(!source)return;
-  try{
-    const revision=Number(el("release-number").value);
-    const lookup=k=>document.querySelector('[data-field="'+k+'"]').value;
-    const acts=source.acts.map((act,i)=>({...act,jp:lookup("act-"+i+"-jp"),en:lookup("act-"+i+"-en")}));
-    const cues=source.cues.map((cue,i)=>({...cue,jp:lookup("cue-"+i+"-jp"),en:lookup("cue-"+i+"-en")}));
-    const raw=exportEditedPack(source,{displayName:el("display-name").value,
-      showJp:el("show-jp").value,showEn:el("show-en").value,acts,cues,revision});
-    const namesChanged=source.showJp!==el("show-jp").value||
-      source.showEn!==el("show-en").value||source.displayName!==el("display-name").value||
-      acts.some((a,i)=>a.jp!==source.acts[i].jp||a.en!==source.acts[i].en)||
-      cues.some((c,i)=>c.jp!==source.cues[i].jp||c.en!==source.cues[i].en);
-    if(!window.confirm("編集版をPCに別名ダウンロードします。\n\n公演: "+source.pack.showId+
-      "\n元Release: "+source.pack.releaseRevision+" → 新Release: "+revision+
-      "\n名称の変更: "+(namesChanged?"あり":"なし")+
-      "\nFixture・Timing・LOOK・UIDは元のバイト列を保持。\n\nGitHubやVRChatにはまだ公開・適用しません。"))return;
-    contentBlob(raw,fileName(source,true,revision));
-    openData(raw,{label:"編集版（PCにも保存済み）"});
-    setStatus("編集版をPCへ保存しました。GitHubへの公開はまだ実行していません。");
-  }catch(error){setStatus("編集版を書き出せません："+error.message,true);}
-}
-function downloadOriginal(){
-  if(!source)return;
-  contentBlob(sourceJSON,fileName(source));
-  setStatus("選択版のJSONをPCへダウンロードしました（元データは未変更）。");
-}
-async function copyURL(){
-  if(!sourceURL)return;
-  try{await navigator.clipboard.writeText(sourceURL);setStatus("VRChat REMOTE用の固定Release URLをコピーしました。");}
-  catch{setStatus("URLをコピーできません。表示されたURLを手動でコピーしてください。",true);}
-}
-e.show.addEventListener("change",()=>{if(dirty&&!confirmChange()){e.show.value=selectedShow?.slug??"";return;}updateReleaseSelect();});
-e.rev.addEventListener("change",updateSelection);
-el("load-public").addEventListener("click",()=>loadPublic());
-el("refresh-catalog").addEventListener("click",refreshCatalog);
-el("file-input").addEventListener("change",ev=>fileOpen(ev.target.files?.[0]));
-el("tab-view").addEventListener("click",()=>selectTab("view"));
-el("tab-edit").addEventListener("click",()=>selectTab("edit"));
-el("download-original").addEventListener("click",downloadOriginal);
-el("copy-url").addEventListener("click",copyURL);
-el("download-edit").addEventListener("click",exportNames);
-el("discard").addEventListener("click",()=>{if(dirty&&!window.confirm("名称の変更を破棄しますか？"))return;initializeEditor();dirty=false;setStatus("編集内容を読み込み時の状態へ戻しました。");});
-for(const id of ["display-name","show-jp","show-en","release-number"])el(id).addEventListener("input",markDirty);
-refreshCatalog();
+el("tab-preview").addEventListener("click",()=>switchPage("preview"));
+el("tab-edit").addEventListener("click",()=>switchPage("edit"));
+el("start-edit").addEventListener("click",()=>switchPage("edit"));
+el("file-input").addEventListener("change",event=>openLocal(event.target.files?.[0]));
+el("show-select").addEventListener("change",selectRelease);
+el("revision-select").addEventListener("change",updateSelected);
+el("load-public").addEventListener("click",loadSelected);
+el("refresh-public").addEventListener("click",refresh);
+el("download-edit").addEventListener("click",save);
+el("discard").addEventListener("click",resetEdits);
+for(const id of ["display-name","show-jp","show-en"])el(id).addEventListener("input",changed);
+refresh();
