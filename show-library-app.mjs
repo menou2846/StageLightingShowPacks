@@ -85,7 +85,7 @@ function renderShowCards(){
     button.append(title,summary);
     button.addEventListener("click",()=>{
       if(selectedShow?.slug!==item.slug&&!confirmChange())return;
-      e.show.value=item.slug;updateReleaseSelect();loadPublic();
+      e.show.value=item.slug;updateReleaseSelect();loadPublic(true);
     });
     list.append(button);
   }
@@ -169,9 +169,9 @@ function openData(raw,{url=null,label="ローカルJSON"}={}){
   selectTab("view");
   setStatus("JSON読込完了： "+result.pack.cueCount+" Cue、Release "+result.pack.releaseRevision+"。");
 }
-async function loadPublic(){
+async function loadPublic(alreadyConfirmed=false){
   if(!selectedRelease||!selectedShow)return;
-  if(!confirmChange())return;
+  if(!alreadyConfirmed&&!confirmChange())return;
   try{
     const item=selectedRelease;
     const url=item.path==="show-pack.json" ? legacyURL() : releaseURL(item,home);
@@ -332,7 +332,7 @@ async function publishCurrentFixed(){
 }
 e.show.addEventListener("change",()=>{if(dirty&&!confirmChange()){e.show.value=selectedShow?.slug??"";return;}updateReleaseSelect();});
 e.rev.addEventListener("change",updateSelection);
-el("load-public").addEventListener("click",loadPublic);
+el("load-public").addEventListener("click",()=>loadPublic());
 el("refresh-catalog").addEventListener("click",refreshCatalog);
 el("file-input").addEventListener("change",ev=>fileOpen(ev.target.files?.[0]));
 el("tab-view").addEventListener("click",()=>selectTab("view"));
