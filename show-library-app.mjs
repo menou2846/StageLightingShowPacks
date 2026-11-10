@@ -148,6 +148,8 @@ function renderRows(target,items,prefix){
         syncDraftText();
         draftCues[i].actUid=select.value;
         changed();
+        // Refresh Act deletion guards after moving the Cue.
+        renderRows("act-list",draftActs,"act");
       });
       row.append(label,select);
     }else{
