@@ -195,10 +195,17 @@ async function loadSelected(){
   }catch(error){setStatus("公開済みJSONを開けません："+error.message,true);}
 }
 async function fetchPublishedDate(){
+  // The update-date lookup is optional metadata. It MUST NOT block the
+  // SHOW editor or public catalog if api.github.com is slow/unavailable.
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),6000);
   try{
-    // The commit timestamp is when the fixed JSON file was changed on GitHub.
-    // The Pages deployment date is NOT reliable for this purpose.
-    const response=await fetch(GITHUB_COMMITS,{cache:"no-store",headers:{Accept:"application/vnd.github+json"}});
+    // This timestamp comes from the latest commit changing show-pack.json;
+    // it is not an inference from browser time or Pages deployment time.
+    const response=await fetch(GITHUB_COMMITS,{
+      cache:"no-store",signal:controller.signal,
+      headers:{Accept:"application/vnd.github+json"}
+    });
     if(!response.ok)throw new Error("HTTP "+response.status);
     const commits=await response.json();
     const iso=commits?.[0]?.commit?.committer?.date;
@@ -212,6 +219,8 @@ async function fetchPublishedDate(){
     el("fixed-updated").textContent="最終更新："+format.format(stamp)+"（日本時間）";
   }catch{
     el("fixed-updated").textContent="最終更新日を確認できません";
+  }finally{
+    clearTimeout(timeout);
   }
 }
 async function refresh(){
@@ -222,7 +231,7 @@ async function refresh(){
     currentFixed=readPack(await response.text());
     el("fixed-name").textContent=currentFixed.pack.displayName||currentFixed.showJp||"名前のない公演";
     // Do not silently invent a published date from the browser's clock.
-    await fetchPublishedDate();
+    void fetchPublishedDate();
   }catch(error){
     currentFixed=null;fixedError=error;
     el("fixed-name").textContent="配信データを確認できません";
