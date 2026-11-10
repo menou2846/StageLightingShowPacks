@@ -52,6 +52,11 @@ button.block{width:100%}
 .preview-entry strong{display:block;font-size:15px;overflow-wrap:anywhere}
 .preview-entry small{display:block;overflow-wrap:anywhere}
 .preview-entry .uid{font-size:12px;color:var(--accent)}
+.preview-act{margin:12px 0 15px;padding:11px 12px;background:#192c3c;border:1px solid var(--line);border-radius:9px}
+.preview-act-title{font-weight:750;color:var(--accent)}
+.preview-act .preview-entry{margin-left:12px}
+.edit-row select{margin-top:4px}
+.remove-act{margin-top:9px;font-size:12px;padding:6px 10px}
 .group{background:var(--sub);border:1px solid var(--line);border-radius:11px;padding:14px;margin-top:17px}
 .list{max-height:450px;overflow:auto;padding-right:4px}
 .edit-row{border-top:1px solid #314459;padding:10px 0}
@@ -123,10 +128,10 @@ footer{font-size:12px;color:var(--muted);padding-bottom:40px}
 <div id="preview-acts" class="list"><p class="tiny">JSONを開いてください。</p></div>
 </div>
 <div class="group">
-<h3>Cue一覧</h3>
+<h3>ActごとのCue一覧</h3>
 <div id="preview-cues" class="list"><p class="tiny">JSONを開いてください。</p></div>
 </div>
-<div class="actions"><button type="button" id="start-edit" class="primary" disabled>このSHOWの名前を編集する</button></div>
+<div class="actions"><button type="button" id="start-edit" class="primary" disabled>名前・Act構成を編集する</button></div>
 </div>
 <div id="edit-panel" role="tabpanel" class="hidden">
 <fieldset id="editor-fields" disabled>
@@ -139,11 +144,13 @@ footer{font-size:12px;color:var(--muted);padding-bottom:40px}
 </div>
 </div>
 <div class="group">
-<h3>Act名</h3>
+<h3>Actの名前と追加・削除</h3>
 <div id="act-list" class="list"><p class="tiny">JSONを開いてください。</p></div>
+<button type="button" id="add-act" class="ghost" style="margin-top:10px">Actを追加</button>
 </div>
 <div class="group">
-<h3>Cue名</h3>
+<h3>Cueの名前と所属Act</h3>
+<p class="tiny">所属先を選ぶと、プレビューでもActの中に表示されます。Cueの実際の再生順は変更しません。</p>
 <div id="cue-list" class="list"><p class="tiny">JSONを開いてください。</p></div>
 </div>
 <details>
@@ -159,10 +166,10 @@ footer{font-size:12px;color:var(--muted);padding-bottom:40px}
 </fieldset>
 <div class="note">編集したデータは、管理者（神無月瑪瑙）に渡してください。</div>
 </div>
-<p class="tiny">変更できるのは名前だけです。照明・タイミング・Cueの内部データは変更せず、GitHubへの自動送信も行いません。</p>
+<p class="tiny">変更できるのは名前とActの構成・Cue所属だけです。Cue再生順・照明・タイミング・演出データは変更せず、GitHubへの自動送信も行いません。</p>
 </section>
 </main>
 <footer>Stage Lighting Console · SHOW 名称エディター</footer>
-<script type="module" src="./show-library-app.mjs?v=20261111-loading-fix"></script>
+<script type="module" src="./show-library-app.mjs?v=20261111-act-groups"></script>
 </body>
 </html>
