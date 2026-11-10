@@ -7,6 +7,14 @@ const GITHUB_COMMITS="https://api.github.com/repos/menou2846/StageLightingShowPa
 let source=null,sourceJSON=null,sourceName="",dirty=false;
 let catalog=null,selectedShow=null,selectedRelease=null,currentFixed=null;
 const releaseText=n=>"R"+String(n).padStart(4,"0");
+// Pages JSON requests also have a bounded wait. A failed request leaves
+// the local JSON editor available and shows an explanatory error.
+async function fetchWithTimeout(url,options={},ms=8000){
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),ms);
+  try{return await fetch(url,{...options,signal:controller.signal});}
+  finally{clearTimeout(timeout);}
+}
 
 function setStatus(message,error=false){
   el("status").textContent=message;
@@ -185,7 +193,7 @@ async function loadSelected(){
   const release=selectedRelease,show=selectedShow;
   try{
     const url=release.path==="show-pack.json"?fixedURL():releaseURL(release,home);
-    const response=await fetch(url,{cache:"no-store"});
+    const response=await fetchWithTimeout(url,{cache:"no-store"});
     if(!response.ok)throw new Error("HTTP "+response.status);
     const raw=await response.text(),doc=readPack(raw);
     if(doc.pack.showId!==show.showId||doc.pack.releaseRevision!==release.revision||
@@ -195,10 +203,17 @@ async function loadSelected(){
   }catch(error){setStatus("公開済みJSONを開けません："+error.message,true);}
 }
 async function fetchPublishedDate(){
+  // The update-date lookup is optional metadata. It MUST NOT block the
+  // SHOW editor or public catalog if api.github.com is slow/unavailable.
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),6000);
   try{
-    // The commit timestamp is when the fixed JSON file was changed on GitHub.
-    // The Pages deployment date is NOT reliable for this purpose.
-    const response=await fetch(GITHUB_COMMITS,{cache:"no-store",headers:{Accept:"application/vnd.github+json"}});
+    // This timestamp comes from the latest commit changing show-pack.json;
+    // it is not an inference from browser time or Pages deployment time.
+    const response=await fetch(GITHUB_COMMITS,{
+      cache:"no-store",signal:controller.signal,
+      headers:{Accept:"application/vnd.github+json"}
+    });
     if(!response.ok)throw new Error("HTTP "+response.status);
     const commits=await response.json();
     const iso=commits?.[0]?.commit?.committer?.date;
@@ -212,17 +227,19 @@ async function fetchPublishedDate(){
     el("fixed-updated").textContent="最終更新："+format.format(stamp)+"（日本時間）";
   }catch{
     el("fixed-updated").textContent="最終更新日を確認できません";
+  }finally{
+    clearTimeout(timeout);
   }
 }
 async function refresh(){
   let fixedError=null;
   try{
-    const response=await fetch(fixedURL(),{cache:"no-store"});
+    const response=await fetchWithTimeout(fixedURL(),{cache:"no-store"});
     if(!response.ok)throw new Error("HTTP "+response.status);
     currentFixed=readPack(await response.text());
     el("fixed-name").textContent=currentFixed.pack.displayName||currentFixed.showJp||"名前のない公演";
     // Do not silently invent a published date from the browser's clock.
-    await fetchPublishedDate();
+    void fetchPublishedDate();
   }catch(error){
     currentFixed=null;fixedError=error;
     el("fixed-name").textContent="配信データを確認できません";
@@ -230,7 +247,7 @@ async function refresh(){
   }
   let shows=[];
   try{
-    const response=await fetch(new URL("catalog.json",home),{cache:"no-store"});
+    const response=await fetchWithTimeout(new URL("catalog.json",home),{cache:"no-store"});
     if(response.ok)shows=readCatalog(await response.text()).shows.map(show=>({
       ...show,releases:[...show.releases]
     }));

@@ -113,7 +113,18 @@ try{
   assert.match(await page.textContent("#preview-show"),/本番用公演/);
   assert.match(await page.textContent("#status"),/管理者（神無月瑪瑙）/);
   assert.deepEqual(errors,[]);
-  console.log("Browser smoke PASS: preview-first editor, safe switching, file download and published name/date");
+  // GitHub's update-date API may stall indefinitely on some connections.
+  // It must never block the catalog, the selected SHOW or the preview UI.
+  const stalled=await browser.newPage();
+  await stalled.route("https://api.github.com/repos/menou2846/StageLightingShowPacks/commits?*",async()=>new Promise(()=>{}));
+  await stalled.goto("http://127.0.0.1:"+port+"/");
+  await stalled.waitForFunction(()=>document.querySelector("#status")?.textContent.includes("JSONを選んで"),null,{timeout:5000});
+  assert.equal(await stalled.textContent("#fixed-name"),"くるみ割り人形");
+  await stalled.click("#load-public");
+  await stalled.waitForFunction(()=>document.querySelector("#preview-show")?.textContent.includes("くるみ割り人形"),null,{timeout:5000});
+  assert.equal(await stalled.getAttribute("#tab-preview","aria-selected"),"true");
+  await stalled.close();
+  console.log("Browser smoke PASS: preview/edit and nonblocking GitHub date API");
 }finally{
   if(browser)await browser.close();
   await new Promise(resolve=>server.close(resolve));
