@@ -104,7 +104,7 @@ function updateSelection(){
   el("load-public").disabled=!selectedRelease;
   el("publication-status").textContent=selectedRelease?
     (selectedShow.archived?"アーカイブ済・":"")+"選択版 R"+String(selectedRelease.revision)+"："+
-    stageLabel(selectedRelease.stage)+"として登録 ／ "+selectedRelease.cueCount+" Cues（VRChatでの適用は未確認）":"公開版なし";
+    (hasPublishedHistory?stageLabel(selectedRelease.stage)+"として登録":"区分未登録") + " ／ "+selectedRelease.cueCount+" Cues（VRChatでの適用は未確認）":"公開版なし";
 }
 function legacyURL(){return new URL("show-pack.json",home).href;}
 function renderFixed(){
