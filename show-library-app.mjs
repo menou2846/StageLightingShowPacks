@@ -291,6 +291,10 @@ function updatePublishPreview(){
 }
 async function publishCurrentFixed(){
   if(publishing)return;
+  if(!currentFixed){
+    el("publish-status").textContent="現在の固定配信を確認できません。誤上書きを防ぐため保存を中止します。配信が確認できてから再実行してください。";
+    return;
+  }
   let raw,doc;
   try{raw=preparedJSON();doc=readPack(raw);}
   catch(error){el("publish-status").textContent="保存対象の検証に失敗："+error.message;return;}
@@ -304,9 +308,9 @@ async function publishCurrentFixed(){
     "\nRelease："+doc.pack.releaseRevision+
     "\n現在の配信："+(previous?previous.displayName+" / R"+previous.releaseRevision:"未取得")+
     "\n\n固定URLの内容が一般公開されます。古い版はバックアップとして保存します。";
-  if(changedShow&&!window.confirm("別の公演に固定URLを切り替えます。\n\n"+details))return;
-  if(!window.confirm("GitHubへ保存しますか？\n\n"+details))return;
-  if(window.prompt("誤操作防止：公開する場合は「公開」と入力してください。")!=="公開")return;
+  if(changedShow&&!window.confirm("別の公演に固定URLを切り替えます。\n\n"+details)){tokenInput.value="";return;}
+  if(!window.confirm("GitHubへ保存しますか？\n\n"+details)){tokenInput.value="";return;}
+  if(window.prompt("誤操作防止：公開する場合は「公開」と入力してください。")!=="公開"){tokenInput.value="";return;}
   publishing=true;updatePublishPreview();
   el("publish-status").textContent="GitHubへ保存しています。ほかの操作は行わないでください。";
   try{
