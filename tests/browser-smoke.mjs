@@ -53,7 +53,9 @@ try{
   const errors=[];
   page.on("pageerror",err=>errors.push(String(err)));
   await page.goto("http://127.0.0.1:"+port+"/");
-  await page.waitForFunction(()=>document.querySelector("#status")?.textContent.includes("公開済み公演"));
+  await page.waitForFunction(()=>document.querySelector("#status")?.textContent.includes("固定配信と保存履歴"));
+  assert.equal(await page.locator("#show-cards .show-card").count(),1);
+  assert.match(await page.textContent("#live-card"),/固定配信/);
   assert.equal(await page.isDisabled("#copy-url"),true);
   assert.equal(await page.isDisabled("#download-original"),true);
   // File is processed locally. No outbound HTTP calls, no GitHub authentication.
@@ -76,6 +78,9 @@ try{
   assert.equal(edited.pack.releaseRevision,2);
   assert.equal(edited.pack.cueCount,1);
   assert.equal(edited.cues[0].uid,"cue-1");
+  await page.click("#tab-manage");
+  assert.equal(await page.isDisabled("#publish-fixed"),false);
+  assert.match(await page.textContent("#publish-preview"),/Show ID: smoke-001/);
   assert.deepEqual(errors,[]);
   console.log("Browser smoke PASS: empty catalog, local upload, safe edit and JSON download");
 }finally{

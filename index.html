@@ -23,7 +23,7 @@ p{margin:8px 0}small{color:var(--muted)}
 header,main,footer{max-width:1200px;margin:auto;padding-left:22px;padding-right:22px}
 header{padding-top:33px;padding-bottom:21px}
 header .eyebrow{color:var(--blue);font:700 11px ui-monospace,Consolas,monospace;letter-spacing:.16em}
-header p{color:var(--muted);max-width:720px}
+header p{color:var(--muted);max-width:860px}
 main{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding-bottom:24px}
 section,aside{min-width:0}
 .panel{border:1px solid var(--edge);border-radius:15px;background:linear-gradient(145deg,#202c3a,#19232f);padding:21px}
@@ -62,6 +62,18 @@ select:disabled,input:disabled{opacity:.55}
 .note{padding:12px 14px;background:#142634;border:1px solid #345269;border-radius:9px;color:var(--muted)}
 code{font:12px/1.5 ui-monospace,Consolas,monospace;overflow-wrap:anywhere}
 footer{padding-bottom:55px;color:var(--muted);font-size:12px}
+.show-cards{display:grid;gap:9px;margin:13px 0}
+.show-card{display:block;text-align:left;width:100%;border-radius:10px;padding:12px;background:#172736;border:1px solid #395064;cursor:pointer}
+.show-card[aria-pressed=true]{border-color:var(--blue);box-shadow:inset 0 0 0 1px var(--blue);background:#1d3548}
+.show-card strong{display:block;color:var(--text);font-size:15px}
+.show-card span{display:block;font-size:12px;color:var(--muted);margin-top:4px}
+.active-tag{display:inline-block;color:#b4f0d9;border:1px solid #3d9078;background:#18372e;font:700 11px/1.4 system-ui;padding:3px 6px;border-radius:6px}
+.live-card{padding:13px;border:1px solid #407668;background:#18342d;border-radius:10px;margin:10px 0 17px}
+.live-card strong{font-size:17px}
+.live-card small{display:block;margin-top:4px}
+details{border-radius:9px}summary{cursor:pointer;padding:7px 0;color:var(--blue)}
+.auth-note{font-size:12px;color:#d1be9a}
+#admin-token{background:var(--panel2);border:1px solid var(--edge);border-radius:8px;color:var(--text);padding:10px 11px;width:100%;max-width:100%}
 @media(max-width:860px){main{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}.panel{padding:17px}}
 </style>
 </head>
@@ -69,13 +81,17 @@ footer{padding-bottom:55px;color:var(--muted);font-size:12px}
 <header>
 <div class="eyebrow">STAGE LIGHTING CONSOLE / SHOW LIBRARY</div>
 <h1>公演データの保管庫</h1>
-<p>VRChatで制作した公演を作品・版ごとに選び、必要なJSONだけをダウンロード。公演名・Act名・Cue名の編集は、元データを残したまま新しいJSONとして保存できます。</p>
+<p>VRChatで制作したSHOWの一覧、固定URLに配信中の版、過去の保存履歴を確認。名称編集と管理者によるGitHub保存もここから操作できます。</p>
 </header>
 <main>
 <aside>
 <section class="panel">
-<h2>公演を選択</h2>
-<small>ここに表示されるのはGitHub Pagesで公開済みの公演だけです。</small>
+<h2>現在の固定配信</h2>
+<div id="live-card" class="live-card" aria-live="polite">固定URLのSHOWを確認しています…</div>
+<h2>保存済みSHOW一覧</h2>
+<p class="tiny muted">一覧から選ぶと、下でその公演の版を確認できます。現在配信中のSHOWにはマークが付きます。</p>
+<div id="show-cards" class="show-cards"><p class="muted tiny">一覧を取得しています…</p></div>
+<h3>公演・Releaseを選択</h3>
 <label for="show-select">作品</label><select id="show-select" disabled><option>公開公演はまだありません</option></select>
 <label for="revision-select">バージョン</label><select id="revision-select" disabled><option>バージョンを選択</option></select>
 <p id="publication-status" class="data-source">公開情報を確認中…</p>
@@ -101,6 +117,7 @@ footer{padding-bottom:55px;color:var(--muted);font-size:12px}
 <div class="tabs" role="tablist" aria-label="ライブラリ画面" style="margin-top:17px">
 <button id="tab-view" type="button" role="tab" aria-selected="true">データ確認・ダウンロード</button>
 <button id="tab-edit" type="button" role="tab" aria-selected="false">名称エディター</button>
+<button id="tab-manage" type="button" role="tab" aria-selected="false">GitHubへ保存（管理者）</button>
 </div>
 <div id="view">
 <h2 id="current-title">公演データが未選択です</h2>
@@ -115,8 +132,9 @@ footer{padding-bottom:55px;color:var(--muted);font-size:12px}
 <button class="primary" id="download-original" disabled>選択データをJSON保存</button>
 <button id="copy-url" disabled>VRChat用URLをコピー</button>
 </div>
-<label>選択版の配信URL</label>
+<details><summary>配信URLの詳細を表示</summary>
 <div id="public-url" class="manifest">未選択（ローカルJSONにはURLがありません）</div>
+</details>
 <div class="divider"></div>
 <div class="note">VRChatに戻すときは SHOW → REMOTE → URL取得 → 比較・検証 → 明示的に取込確定。本番中に自動でLIVEへ適用されることはありません。</div>
 </div>
@@ -134,12 +152,28 @@ footer{padding-bottom:55px;color:var(--muted);font-size:12px}
 <section class="editor-group"><h3>Cue名</h3><div id="cue-list" class="editor-list"><small>公演データを読み込んでください。</small></div></section>
 <div class="actions"><button type="button" class="primary" id="download-edit">編集版JSONを別名ダウンロード</button><button type="button" id="discard">編集を取り消す</button></div>
 </fieldset>
-<div class="note">この画面の「保存」は**PCへのダウンロードのみ**です。公開中のJSONや過去のReleaseを自動変更しません。新しい版をGitHubへ公開する操作は、PC管理ツール側の認証・確認が必要です。</div>
+<div class="note">ここでの「編集版JSONを別名ダウンロード」はPCへの保存です。GitHubの固定URLに反映する場合は「GitHubへ保存（管理者）」を開き、確認後に実行してください。</div>
+</div>
+<div id="manage" class="hidden">
+<h2>管理者：GitHubの固定URLへ保存</h2>
+<p class="muted">「データ確認」または「名称エディター」で選んだSHOW JSONを固定URLに反映します。Webへアクセスできる人全員が配信データを取得できるため、公開してよいSHOWだけを選択してください。</p>
+<div id="publish-preview" class="note">まずSHOW JSONを開いてください。</div>
+<div class="grid2">
+<div><label for="publish-label">保存履歴に表示する名前</label><input id="publish-label" type="text" maxlength="128" value="固定URL公開版"></div>
+<div><label for="publish-stage">保存履歴の分類</label><select id="publish-stage"><option value="final">本番版</option><option value="candidate">本番候補</option><option value="rehearsal">リハーサル（※公開されます）</option></select></div>
+</div>
+<label for="admin-token">GitHub管理者トークン（この操作だけで使用）</label>
+<input id="admin-token" type="password" autocomplete="off" spellcheck="false" placeholder="GitHub fine-grained token">
+<p class="auth-note">本人のGitHubアカウントで、StageLightingShowPacksのみ「Contents: Read and write」の権限がある短期限のfine-grained tokenを使用。ページにトークンを埋め込まず、保存・ログ・GitHubコミットに含めません。公開サイト上での入力にはリスクがあるため、正しいページURLを確認してください。</p>
+<div class="actions"><button type="button" class="primary" id="publish-fixed" disabled>内容を確認して固定URLへ保存</button><button type="button" id="refresh-after-publish">一覧を再読込</button></div>
+<div id="publish-status" class="status" role="status" aria-live="polite">まだGitHubへ保存していません。</div>
+<div class="divider"></div>
+<div class="note">保存時は、更新前の固定URL版と新しい版を「過去版」として保持し、SHOW一覧も同じGitHub Commitで更新します。旧Releaseは上書きしません。VRChatへの適用は別操作です。GitHub Pagesの反映には遅延がある場合があります。</div>
 </div>
 </div>
 </section>
 </main>
-<footer>Stage Lighting Console · Show Library v2 preview · 公演の公開と本番適用は別操作</footer>
+<footer>Stage Lighting Console · Show Library · 固定URLの配信とVRChat本番適用は別操作</footer>
 <script type="module" src="./show-library-app.mjs"></script>
 </body>
 </html>
