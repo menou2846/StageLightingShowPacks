@@ -33,6 +33,9 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Exercise JSON upload, editing and download in Chromium
         run: node tests/browser-smoke.mjs
+      - name: Diagnose real GitHub Pages loading state
+        run: node tests/live-site-diagnostic.mjs
+        continue-on-error: true
       - name: Check published catalog is initially empty
         run: |
           node --input-type=module -e 'import fs from "node:fs"; import {readCatalog} from "./show-library-catalog.mjs"; const c=readCatalog(fs.readFileSync("catalog.json","utf8")); if(c.shows.length)process.exit(1);'
