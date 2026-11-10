@@ -51,6 +51,9 @@ button.block{width:100%}
 .edit-row .uid{color:var(--accent);font-size:12px;font-weight:700}
 .edit-row label{margin-top:5px}
 .hint{color:var(--muted);font-size:12px;margin:5px 0}
+.published-summary{background:var(--sub);border:1px solid var(--line);border-radius:10px;padding:13px}
+.published-summary strong{display:block;font-size:17px;margin-top:5px;overflow-wrap:anywhere}
+.published-summary .tiny{margin-top:7px}
 .note{font-size:13px;color:#c5d9e9;background:var(--sub);border:1px solid var(--line);padding:11px 12px;border-radius:9px;margin-top:12px}
 summary{color:var(--accent);cursor:pointer;padding:7px 0;font-size:13px}
 details{margin-top:13px}
@@ -74,6 +77,12 @@ footer{font-size:12px;color:var(--muted);padding-bottom:40px}
 <label for="file-input">PCに保存したJSON</label>
 <input id="file-input" type="file" accept=".json,application/json">
 <p class="tiny">VRChat受取アプリで保存したJSONも選べます。</p>
+<div class="divider"></div>
+<div class="published-summary">
+<h3>現在配信中のSHOW</h3>
+<strong id="fixed-name">確認中…</strong>
+<p id="fixed-updated" class="tiny">最終更新日を確認しています…</p>
+</div>
 <div class="divider"></div>
 <h3>公開済みのJSONを開く</h3>
 <label for="show-select">公演</label>
