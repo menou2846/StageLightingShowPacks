@@ -1,5 +1,31 @@
 {
   "format": "stage-lighting-show-catalog",
   "version": 1,
-  "shows": []
+  "shows": [
+    {
+      "slug": "show-c3c2f29ae8af1663",
+      "showId": "show-caec7c4558d74277919308849cfdc8a5",
+      "title": "くるみ割り人形",
+      "archived": false,
+      "publishedRevision": 5,
+      "releases": [
+        {
+          "revision": 2,
+          "label": "以前の固定配信版",
+          "stage": "final",
+          "cueCount": 4,
+          "dataSchema": 2,
+          "path": "shows/show-c3c2f29ae8af1663/releases/r0002.json"
+        },
+        {
+          "revision": 5,
+          "label": "固定URL配信版",
+          "stage": "final",
+          "cueCount": 4,
+          "dataSchema": 2,
+          "path": "shows/show-c3c2f29ae8af1663/releases/r0005.json"
+        }
+      ]
+    }
+  ]
 }
