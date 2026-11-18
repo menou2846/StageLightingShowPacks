@@ -20,9 +20,9 @@ VRChat Stage Lighting Console用の**公開公演ライブラリ**です。
 
 - **公演を選択** → **保存済みReleaseを選択** → JSONを検証して名称エディターへ読み込み（直接URLコピーはWebのメイン操作から除外）
 - **手元のRemote Pack JSONを開いて名称編集**。ブラウザ内だけで読み込み、未公開ファイルをサーバーへ送信しない
-- **Webの名称エディター**は、Show名 / Act名 / Cue名（日英）と表示名だけを変更できる。照明パラメータ、Cue UID、Role、Fixture、Timing、LOOK、FOLLOW、Act割当とSchema 3～5のtailはバイト単位で保護
+- **Webの名称エディター**は、Show名 / Act名 / Cue名（日英）と表示名だけを変更できる。照明パラメータ、Cue UID、Role、Fixture、Timing、LOOK、FOLLOW、Act割当とSchema 3～6のtail（IRIS・任意LOOKを含む）はバイト単位で保護
 - 編集後はRelease Revisionを上げて**新しいJSONをローカルへダウンロード**。元の公開版、手元の元ファイル、GitHubの履歴は変更しない
-- Schema 1は名称が格納されないため読込のみ。名前編集はSchema 2～5
+- Schema 1は名称が格納されないため読込のみ。名前編集はSchema 2～6。Schema 6のBEAM（IRIS）角度と任意LOOK情報は編集せず保持する
 - 過去Releaseは**固定URL**を持ち、後からほかのReleaseを追加しても置き換えない
 - Webではブラウザ内の名称編集とPC保存のみ。GitHubへの公開は管理者PCのアプリから明示操作する
 
