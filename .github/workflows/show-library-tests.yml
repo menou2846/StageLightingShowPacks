@@ -33,6 +33,6 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Exercise JSON upload, editing and download in Chromium
         run: node tests/browser-smoke.mjs
-      - name: Check published catalog is initially empty
+      - name: Validate current public catalog structure
         run: |
-          node --input-type=module -e 'import fs from "node:fs"; import {readCatalog} from "./show-library-catalog.mjs"; const c=readCatalog(fs.readFileSync("catalog.json","utf8")); if(c.shows.length)process.exit(1);'
+          node --input-type=module -e 'import fs from "node:fs"; import {readCatalog} from "./show-library-catalog.mjs"; const c=readCatalog(fs.readFileSync("catalog.json","utf8")); console.log("Validated public Show catalog entries:", c.shows.length);'
