@@ -72,7 +72,8 @@ try{
   // Confirm fixed SHOW can be read and edited without publishing or tokens.
   await page.click("#load-public");
   await page.waitForFunction(()=>document.querySelector("#editor-title")?.textContent==="くるみ割り人形");
-  assert.equal(await page.inputValue("#release-number"),"3");
+  const fixedPack=JSON.parse(await readFile(resolve(root,"show-pack.json"),"utf8"));
+  assert.equal(await page.inputValue("#release-number"),String(fixedPack.releaseRevision+1));
   assert.equal(await page.locator("#show-jp").isDisabled(),false);
   assert.equal(await page.getAttribute("#tab-preview","aria-selected"),"true");
   assert.equal(await page.locator("#edit-panel").isHidden(),true);
