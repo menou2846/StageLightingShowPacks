@@ -83,7 +83,7 @@ class Reader {
   }
 }
 function integerFields(pack) {
-  const limits={packVersion:[1,1],dataSchema:[1,5],cueCount:[0,256],changeCount:[0,4096],roleCount:[1,16],fixtureCount:[0,4096],bodyLength:[1,MAX_BODY_BYTES],releaseRevision:[0,MAX_INT],saveRevision:[0,MAX_INT-1],workingRevision:[0,MAX_INT-1]};
+  const limits={packVersion:[1,1],dataSchema:[1,6],cueCount:[0,256],changeCount:[0,4096],roleCount:[1,16],fixtureCount:[0,4096],bodyLength:[1,MAX_BODY_BYTES],releaseRevision:[0,MAX_INT],saveRevision:[0,MAX_INT-1],workingRevision:[0,MAX_INT-1]};
   for(const [field,[min,max]] of Object.entries(limits)){
     if(!isInt(pack[field],min,max))fail("Remote Packメタデータが不正です: "+field);
   }
@@ -122,8 +122,13 @@ export function readPack(raw) {
     cues.push({uid,jp:"",en:"",actUid:""});
   }
   if(changes!==pack.changeCount)fail("Change件数が一致しません");
+  const changeMasks=[];
   for(let i=0;i<pack.changeCount;i++){
-    reader.str();reader.take(4+4+4+16+1+4+4+1+16+16+4+4+1);
+    reader.str();
+    const mask=reader.i();
+    if(!isInt(mask,0,pack.dataSchema>=6?4095:2047))fail("Change maskが不正です");
+    changeMasks.push(mask);
+    reader.take(4+4+16+1+4+4+1+16+16+4+4+1);
     reader.str();reader.take(4);
   }
   const prefixEnd=reader.pos;let suffixStart=prefixEnd;
@@ -150,10 +155,27 @@ export function readPack(raw) {
       if(mask)reader.take(4+16+1+4+4+1);
     }
   }
-  if(pack.dataSchema>=5){
+  // Schema 5 always contains LOOK names. Schema 6 has a one-byte
+  // section-presence flag, followed by optional LOOK names/library.
+  let named=pack.dataSchema===5;
+  if(pack.dataSchema>=6){
+    const flag=reader.b();
+    if(flag!==0&&flag!==1)fail("Schema 6のLOOK section flagが不正です");
+    named=flag===1;
+  }
+  if(named){
     for(let c=0;c<cues.length;c++){reader.str();reader.str();reader.str();reader.take(8);}
     const count=reader.i();if(!isInt(count,0,8))fail("LOOK preset数が不正です");
     for(let i=0;i<count;i++){reader.str();reader.str();reader.str();reader.take(28);}
+  }
+  if(pack.dataSchema>=6){
+    // BEAM is bit 2048. Only Changes with that bit have an IRIS float32,
+    // stored at the end in original Change order (never per Cue).
+    for(const mask of changeMasks)if(mask&2048){
+      const bytes=reader.take(4);
+      const angle=new DataView(bytes.buffer,bytes.byteOffset,4).getFloat32(0,true);
+      if(!Number.isFinite(angle)||angle<5||angle>120)fail("Schema 6のIRIS角度が不正です");
+    }
   }
   if(reader.pos!==body.length)fail("Snapshotに余分なデータがあります");
   const actUIDs=new Set(acts.map(a=>a.uid));

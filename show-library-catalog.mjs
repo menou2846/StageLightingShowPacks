@@ -19,7 +19,7 @@ export function readCatalog(json) {
     const revisions=new Set();
     for(const release of show.releases) {
       if(!release||typeof release!=="object"||!isInt(release.revision,0,2147483647)||!text(release.label,128)||!text(release.path,256)||
-         !isInt(release.cueCount,0,256)||!isInt(release.dataSchema,1,5)||
+         !isInt(release.cueCount,0,256)||!isInt(release.dataSchema,1,6)||
          !["rehearsal","candidate","final"].includes(release.stage)||!validPath(release.path)||
          !release.path.startsWith("shows/"+show.slug+"/releases/")) fail("Release情報が不正です");
       if(revisions.has(release.revision)||paths.has(release.path))fail("Release番号かパスが重複しています");
