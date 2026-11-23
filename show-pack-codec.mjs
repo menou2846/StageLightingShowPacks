@@ -9,6 +9,11 @@ const MAX_STR = 256;
 const fail = message => { throw new Error(message); };
 const isInt = (v,min,max) => Number.isSafeInteger(v) && v >= min && v <= max;
 const u32 = value => value >>> 0;
+// StageLightingRuntime Change bits: ALL_MASK 4095 (IRIS/BEAM 2048 from Schema 6), BEAM_FX 8192 from Schema 8.
+// 4096 is never a Change bit (Timeline LOOK kind codes).
+const BEAM = 2048, BEAM_FX = 8192;
+const changeMaskAllowed = schema => schema>=8 ? (4095|BEAM_FX) : schema>=6 ? 4095 : 2047;
+const f32 = Math.fround;
 
 export function nameCheck(value, max=MAX_STR) {
   if (typeof value !== "string" || value.length > max) fail("文字数が上限を超えているか、名称が文字列ではありません");
@@ -83,7 +88,7 @@ class Reader {
   }
 }
 function integerFields(pack) {
-  const limits={packVersion:[1,1],dataSchema:[1,6],cueCount:[0,256],changeCount:[0,4096],roleCount:[1,16],fixtureCount:[0,4096],bodyLength:[1,MAX_BODY_BYTES],releaseRevision:[0,MAX_INT],saveRevision:[0,MAX_INT-1],workingRevision:[0,MAX_INT-1]};
+  const limits={packVersion:[1,1],dataSchema:[1,8],cueCount:[0,256],changeCount:[0,4096],roleCount:[1,16],fixtureCount:[0,4096],bodyLength:[1,MAX_BODY_BYTES],releaseRevision:[0,MAX_INT],saveRevision:[0,MAX_INT-1],workingRevision:[0,MAX_INT-1]};
   for(const [field,[min,max]] of Object.entries(limits)){
     if(!isInt(pack[field],min,max))fail("Remote Packメタデータが不正です: "+field);
   }
@@ -110,13 +115,13 @@ export function readPack(raw) {
   const reader=new Reader(body);
   if(reader.str()!==pack.showId)fail("Show IDがSnapshotと一致しません");
   for(let i=0;i<pack.roleCount;i++){reader.str();reader.str();reader.str();}
-  const cues=[];let changes=0;
+  const cues=[];let changes=0,lookCues=0;
   for(let c=0;c<pack.cueCount;c++){
     const uid=reader.str();const groups=reader.i();
     if(!uid || !isInt(groups,1,4))fail("Cue UID/Timingが不正です");
     reader.take(groups*12);
     const look=reader.b();if(look!==0&&look!==1)fail("LOOK flagが不正です");
-    if(look)reader.take(4+7*4);
+    if(look){lookCues++;reader.take(4+7*4);}
     const count=reader.i();if(!isInt(count,0,pack.changeCount-changes))fail("Change件数が不正です");
     changes+=count;
     cues.push({uid,jp:"",en:"",actUid:""});
@@ -126,7 +131,7 @@ export function readPack(raw) {
   for(let i=0;i<pack.changeCount;i++){
     reader.str();
     const mask=reader.i();
-    if(!isInt(mask,0,pack.dataSchema>=6?4095:2047))fail("Change maskが不正です");
+    if(!Number.isSafeInteger(mask)||mask<0||(mask&~changeMaskAllowed(pack.dataSchema)))fail("Change maskが不正です");
     changeMasks.push(mask);
     reader.take(4+4+16+1+4+4+1+16+16+4+4+1);
     reader.str();reader.take(4);
@@ -157,7 +162,7 @@ export function readPack(raw) {
   }
   // Schema 5 always contains LOOK names. Schema 6 has a one-byte
   // section-presence flag, followed by optional LOOK names/library.
-  let named=pack.dataSchema===5;
+  let named=pack.dataSchema===5,presets=0;
   if(pack.dataSchema>=6){
     const flag=reader.b();
     if(flag!==0&&flag!==1)fail("Schema 6のLOOK section flagが不正です");
@@ -166,15 +171,32 @@ export function readPack(raw) {
   if(named){
     for(let c=0;c<cues.length;c++){reader.str();reader.str();reader.str();reader.take(8);}
     const count=reader.i();if(!isInt(count,0,8))fail("LOOK preset数が不正です");
+    presets=count;
     for(let i=0;i<count;i++){reader.str();reader.str();reader.str();reader.take(28);}
   }
   if(pack.dataSchema>=6){
     // BEAM is bit 2048. Only Changes with that bit have an IRIS float32,
     // stored at the end in original Change order (never per Cue).
-    for(const mask of changeMasks)if(mask&2048){
+    for(const mask of changeMasks)if(mask&BEAM){
       const bytes=reader.take(4);
       const angle=new DataView(bytes.buffer,bytes.byteOffset,4).getFloat32(0,true);
       if(!Number.isFinite(angle)||angle<5||angle>120)fail("Schema 6のIRIS角度が不正です");
+    }
+  }
+  const float=()=>{const b=reader.take(4);return new DataView(b.buffer,b.byteOffset,4).getFloat32(0,true);};
+  if(pack.dataSchema>=7){
+    // Schema 7 LOOK RGB: one float32 R,G,B per LOOK Cue (Cue order), then per preset when the
+    // Schema 6 LOOK section flag is 1. No header/count; neutral 1,1,1 triples are still written.
+    for(let i=0;i<3*(lookCues+(named?presets:0));i++){
+      const v=float();if(!Number.isFinite(v)||v<0||v>1)fail("Schema 7のLOOK RGB値が不正です");
+    }
+  }
+  if(pack.dataSchema>=8){
+    // Schema 8 BEAM FX: per Change with bit 8192, in Change order, float32 visible (exactly +1/-1),
+    // opacity [.05,1], edge softness [.5,6], tip fade [.05,.99] (Unity float32 bounds).
+    for(const mask of changeMasks)if(mask&BEAM_FX){
+      const x=float(),y=float(),z=float(),w=float();
+      if((x!==1&&x!==-1)||!(y>=f32(.05)&&y<=1)||!(z>=f32(.5)&&z<=6)||!(w>=f32(.05)&&w<=f32(.99)))fail("Schema 8のBEAM FX値が不正です");
     }
   }
   if(reader.pos!==body.length)fail("Snapshotに余分なデータがあります");

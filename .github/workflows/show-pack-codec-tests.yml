@@ -6,6 +6,7 @@ on:
       - "show-pack-codec.mjs"
       - "show-library-catalog.mjs"
       - "tests/schema6-codec.test.mjs"
+      - "tests/schema78-codec.test.mjs"
       - ".github/workflows/show-pack-codec-tests.yml"
   workflow_dispatch:
 
@@ -20,5 +21,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Schema 2-6 lossless roundtrip tests (offline)
-        run: node --test tests/schema6-codec.test.mjs
+      - name: Schema 2-8 lossless roundtrip tests (offline)
+        run: node --test tests/schema6-codec.test.mjs tests/schema78-codec.test.mjs
