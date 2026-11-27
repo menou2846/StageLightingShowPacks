@@ -8,8 +8,10 @@ import {readCatalog} from "../show-library-catalog.mjs";
 
 const FX=[-1,.6,2,.4];
 // looks: LOOK flag per Cue. presets: written only when named. rgb: Schema 7 floats (default neutral).
-// beamFx: Schema 8 floats for the one Change (sets mask bit 8192). mask: override. tail: extra bytes.
-function packBytes(schema,{named=true,looks=[false,false],presets=0,rgb=null,beamFx=null,mask=null,tail=null}={}){
+// beamFx: Schema 8 floats for the one Change (bit 8192).
+// spotRange: Schema 9 float32 meters (bit 16384) appended after BEAM FX.
+// mask: override. tail: extra bytes.
+function packBytes(schema,{named=true,looks=[false,false],presets=0,rgb=null,beamFx=null,spotRange=null,mask=null,tail=null}={}){
   const parts=[];
   const push=b=>parts.push(b);
   const i=n=>{const b=Buffer.alloc(4);b.writeInt32LE(n);push(b);};
@@ -23,8 +25,8 @@ function packBytes(schema,{named=true,looks=[false,false],presets=0,rgb=null,bea
     if(looks[c]){byte(1);i(0);for(let k=0;k<7;k++)f(.1*(k+1));}else byte(0);
     i(c===0?1:0);
   }
-  str("SPOT_L");
-  i(mask??(2048|(beamFx?8192:0)));i(0);f(.6);
+  str(spotRange!==null?"BACK_SPOT_C":"SPOT_L");
+  i(mask??(2048|(beamFx?8192:0)|(spotRange!==null?16384:0)));i(0);f(.6);
   for(let k=0;k<4;k++)f(1);
   byte(1);f(0);f(0);byte(0);
   for(let k=0;k<8;k++)f(1);
@@ -43,6 +45,7 @@ function packBytes(schema,{named=true,looks=[false,false],presets=0,rgb=null,bea
   f(75);                                      // Schema 6 IRIS for the 2048 Change
   if(schema>=7)for(const v of rgb??Array(3*(looks.filter(Boolean).length+(named?presets:0))).fill(1))f(v);
   if(beamFx)for(const v of beamFx)f(v);
+  if(spotRange!==null)f(spotRange);
   if(tail)push(tail);
   const body=Buffer.concat(parts);
   return {format:"stage-lighting-show-pack",packVersion:1,dataSchema:schema,showId:"show-001",displayName:"リハ版",
@@ -114,19 +117,65 @@ test("Schema 8 rejects invalid BEAM FX values, truncation, trailing data and bad
   for(const mask of [4096|2048,16384,-1])assert.throws(()=>load(packBytes(8,{mask,beamFx:FX})),/Change mask/);
 });
 
-test("hash covers the schema; corrupted body rejected; Schema 9 rejected; older schemas unaffected",()=>{
+test("hash covers the schema; corrupted body rejected; Schema 10 rejected; older schemas unaffected",()=>{
   const pack=packBytes(8,{beamFx:FX});
   assert.throws(()=>load({...pack,dataSchema:7}),/ハッシュ/);
   const body=Buffer.from(pack.payloadBase64,"base64");body[body.length-1]^=1;
   assert.throws(()=>load({...pack,payloadBase64:body.toString("base64")}),/ハッシュ/);
-  const nine=packBytes(8,{beamFx:FX});
-  assert.throws(()=>load({...nine,dataSchema:9,bodyHashFNV1a32:fnv32(Buffer.from(nine.payloadBase64,"base64"),9,2,1,12)}),/dataSchema/);
+  const ten=packBytes(8,{beamFx:FX});
+  assert.throws(()=>load({...ten,dataSchema:10,bodyHashFNV1a32:fnv32(Buffer.from(ten.payloadBase64,"base64"),10,2,1,12)}),/dataSchema/);
 });
 
-test("catalog accepts dataSchema 7 and 8, rejects 9",()=>{
+test("catalog accepts dataSchema 7–9, rejects 10",()=>{
   const catalog=schema=>JSON.stringify({format:"stage-lighting-show-catalog",version:1,shows:[{
     slug:"nutcracker",showId:"show-001",title:"くるみ割り",archived:false,publishedRevision:null,releases:[{
       revision:5,label:"テスト",stage:"rehearsal",cueCount:2,dataSchema:schema,path:"shows/nutcracker/releases/r0005.json"}]}]});
-  for(const s of [7,8])assert.equal(readCatalog(catalog(s)).shows[0].releases[0].dataSchema,s);
-  assert.throws(()=>readCatalog(catalog(9)));
+  for(const s of [7,8,9])assert.equal(readCatalog(catalog(s)).shows[0].releases[0].dataSchema,s);
+  assert.throws(()=>readCatalog(catalog(10)));
+});
+
+test("Schema 9 SPOT RANGE .5..200m tail follows RGB and BEAM FX, lossless rename",()=>{
+  const cases=[
+    {named:false,spotRange:.5},
+    {named:true,looks:[true,false],presets:1,rgb:[.1,.2,.3,.4,.5,.6],
+     beamFx:FX,spotRange:200},
+    {named:true,beamFx:[1,1,6,.99],spotRange:75.25}
+  ];
+  for(const opts of cases){
+    const pack=packBytes(9,opts);
+    const doc=load(pack);
+    assert.equal(doc.pack.roleCount,12);
+    assert.equal(Buffer.from(doc.body).readFloatLE(doc.body.length-4),opts.spotRange);
+    renameRoundtrip(pack);
+  }
+});
+
+test("Schema 9 without SPOT RANGE bit has no range tail",()=>{
+  const pack=packBytes(9,{named:false});
+  const doc=load(pack);
+  assert.equal(doc.pack.dataSchema,9);
+  assert.equal(Buffer.from(doc.body).readFloatLE(doc.body.length-4),75);
+  renameRoundtrip(pack);
+});
+
+test("Schema 9 rejects invalid distance, truncation, trailing data and disallowed masks",()=>{
+  for(const distance of [0,-0,.499,200.001,-1,NaN,Infinity,-Infinity])
+    assert.throws(()=>load(packBytes(9,{spotRange:distance})),/SPOT RANGE/,String(distance));
+  assert.throws(()=>load(packBytes(9,{mask:2048|16384})),/途中/);
+  assert.throws(()=>load(packBytes(9,{spotRange:2,tail:Buffer.from([0])})),/余分/);
+  for(const schema of [6,7,8])
+    assert.throws(()=>load(packBytes(schema,{spotRange:2})),/Change mask/,String(schema));
+  assert.throws(()=>load(packBytes(9,{spotRange:2,mask:2048|4096|16384})),/Change mask/);
+});
+
+test("Schema 9 protects FNV/schema and rejects truncated or relabelled pack",()=>{
+  const pack=packBytes(9,{spotRange:2});
+  const body=Buffer.from(pack.payloadBase64,"base64");
+  assert.throws(()=>load({...pack,dataSchema:8}),/ハッシュ/);
+  const corrupt=Buffer.from(body);corrupt[corrupt.length-1]^=1;
+  assert.throws(()=>load({...pack,payloadBase64:corrupt.toString("base64")}),/ハッシュ/);
+  const short=body.subarray(0,-1);
+  const downgraded={...pack,bodyLength:short.length,payloadBase64:short.toString("base64"),
+    bodyHashFNV1a32:fnv32(short,9,2,1,12)};
+  assert.throws(()=>load(downgraded),/途中/);
 });
