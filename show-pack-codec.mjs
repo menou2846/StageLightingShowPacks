@@ -9,10 +9,11 @@ const MAX_STR = 256;
 const fail = message => { throw new Error(message); };
 const isInt = (v,min,max) => Number.isSafeInteger(v) && v >= min && v <= max;
 const u32 = value => value >>> 0;
-// StageLightingRuntime Change bits: ALL_MASK 4095 (IRIS/BEAM 2048 from Schema 6), BEAM_FX 8192 from Schema 8.
+// StageLightingRuntime Change bits: ALL_MASK 4095 (IRIS/BEAM 2048 since Schema 6),
+// BEAM_FX 8192 since Schema 8, SPOT_RANGE 16384 since Schema 9.
 // 4096 is never a Change bit (Timeline LOOK kind codes).
-const BEAM = 2048, BEAM_FX = 8192;
-const changeMaskAllowed = schema => schema>=8 ? (4095|BEAM_FX) : schema>=6 ? 4095 : 2047;
+const BEAM = 2048, BEAM_FX = 8192, SPOT_RANGE = 16384;
+const changeMaskAllowed = schema => schema>=9 ? (4095|BEAM_FX|SPOT_RANGE) : schema>=8 ? (4095|BEAM_FX) : schema>=6 ? 4095 : 2047;
 const f32 = Math.fround;
 
 export function nameCheck(value, max=MAX_STR) {
@@ -88,7 +89,7 @@ class Reader {
   }
 }
 function integerFields(pack) {
-  const limits={packVersion:[1,1],dataSchema:[1,8],cueCount:[0,256],changeCount:[0,4096],roleCount:[1,16],fixtureCount:[0,4096],bodyLength:[1,MAX_BODY_BYTES],releaseRevision:[0,MAX_INT],saveRevision:[0,MAX_INT-1],workingRevision:[0,MAX_INT-1]};
+  const limits={packVersion:[1,1],dataSchema:[1,9],cueCount:[0,256],changeCount:[0,4096],roleCount:[1,16],fixtureCount:[0,4096],bodyLength:[1,MAX_BODY_BYTES],releaseRevision:[0,MAX_INT],saveRevision:[0,MAX_INT-1],workingRevision:[0,MAX_INT-1]};
   for(const [field,[min,max]] of Object.entries(limits)){
     if(!isInt(pack[field],min,max))fail("Remote Packメタデータが不正です: "+field);
   }
@@ -197,6 +198,14 @@ export function readPack(raw) {
     for(const mask of changeMasks)if(mask&BEAM_FX){
       const x=float(),y=float(),z=float(),w=float();
       if((x!==1&&x!==-1)||!(y>=f32(.05)&&y<=1)||!(z>=f32(.5)&&z<=6)||!(w>=f32(.05)&&w<=f32(.99)))fail("Schema 8のBEAM FX値が不正です");
+    }
+  }
+  if(pack.dataSchema>=9){
+    // Schema 9 SPOT_RANGE: float32 LE meters per Change with bit 16384,
+    // in Change order, after BEAM FX. No header/count/sentinel.
+    for(const mask of changeMasks)if(mask&SPOT_RANGE){
+      const meters=float();
+      if(!Number.isFinite(meters)||meters<.5||meters>200)fail("Schema 9のSPOT RANGE照射距離が不正です");
     }
   }
   if(reader.pos!==body.length)fail("Snapshotに余分なデータがあります");

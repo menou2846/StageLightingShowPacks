@@ -21,5 +21,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Schema 2-8 lossless roundtrip tests (offline)
+      - name: Schema 2-9 lossless roundtrip tests (offline)
         run: node --test tests/schema6-codec.test.mjs tests/schema78-codec.test.mjs
